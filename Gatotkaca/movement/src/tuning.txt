@@ -1,0 +1,36 @@
+- cara tuning Kp, Ki, dan Kd
+yang perlu diperhatikan:
+1. ini untuk setiap roda
+2. robot harus sudah diberi beban
+3. nilai bisa di samain untuk semua roda tapi sangat tidak direkomendasikan
+4. pastikan Battery Voltage dalam kondisi penuh (Full).
+5. nilai setpoint/nilai hasil perhitungan gamepad harus di buat konstan[jgn pake gamepad] agar gampang dihitung
+
+- Awal
+1. robot diangkat agar tidak berpindah tempat ketika tuning
+2. 0 kan semua parameter
+3. harus print nilai asli motor dan nilai aktual[yang diinginkan]
+
+- Mencari Kp 
+1. Mulai Kp dari nilai sangat kecil (misal 0.05).
+2. Naikkan nilai Kp secara perlahan (misal: 0.05, 0.1, 0.2, ...).
+3. Naikkan Kp sampai roda berputar dan kecepatannya mulai naik-turun[osilasi] secara stabil di sekitar target.
+4. Catat nilai ini sebagai Ku (Ultimate Gain).
+
+- Mencari Kd
+1. Masukkan nilai Kd secara perlahan (misal mulai dari 0.01). [Kp harus sudah terisi dengan nilai dari percobaan sebelumnya]
+2. Tambahkan sampai osilasi hilang dan gerakan roda menjadi tenang saat mencapai target.
+3. Jika motor terdengar berderit atau bergetar dengan frekuensi sangat tinggi (suara kasar), kecilkan nilai.
+
+- Mencari Ki [[Kp dan Kd harus sudah terisi dengan nilai dari percobaan sebelumnya]]
+note:
+robot sudah bergerak lancar tetapi kecepatannya selalu sedikit di bawah target
+ (misal target 100 RPM, tapi hanya stabil di 96 RPM),
+1. Masukkan nilai Ki yang sangat kecil (misal 0.001 atau 0.005).
+2. Kecepatan Actual harus merayap naik hingga tepat menempel pada kecepatan Target.
+
+Uji "Load Resistance" (Beban) Ki test
+1. Jalankan roda pada kecepatan tertentu.
+2. Coba berikan sedikit beban/tahanan pada roda menggunakan tangan
+3. Saat  diberi beban, RPM akan turun sebentar, 
+    namun perlahan-lahan RPM akan naik kembali ke target semula meskipun Anda masih menahan roda tersebut. 
