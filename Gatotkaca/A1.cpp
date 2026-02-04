@@ -1,3 +1,5 @@
+//udah sampai gerak dasar robot, tinggal benerin eror+mikirin konsep robot naik ke forest
+
 // --- KONFIGURASI PIN MOTOR ---
 // FL = Front Left, FR = Front Right, BL = Back Left, BR = Back Right
 const int FL_PWM = 6;  const int FL_DIR = 7;
