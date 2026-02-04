@@ -292,7 +292,7 @@ void handleObstacle() {
   delay(500);
   
   // Display current sensor readings
-  Serial.println("\n📊 Current Distances:");
+  Serial.println("\nCurrent Distances:");
   Serial.print("  Front: "); Serial.print(distanceFront); Serial.println(" cm");
   Serial.print("  Back:  "); Serial.print(distanceBack); Serial.println(" cm");
   Serial.print("  Left:  "); Serial.print(distanceLeft); Serial.println(" cm");
@@ -408,7 +408,6 @@ void handleObstacle() {
 void performTicTacToeMode() {
   
   tictactoeMode = true;
-  
   // STEP 1: Approach board using FRONT sensor
   Serial.println("Step 1: Approaching game board...");
   
@@ -514,38 +513,37 @@ void performTicTacToeMode() {
   int moves[] = {5, 1, 3, 7, 9};
   
   for (int i = 0; i < 5; i++) {
-    Serial.print("\n🎯 Move "); Serial.print(i+1);
+    Serial.print("\nMove "); Serial.print(i+1);
     Serial.print(": Cell "); Serial.println(moves[i]);
     
     navigateToCell(moves[i]);
     
     if (readVibration()) {
-      Serial.println("⚠ Vibration - waiting...");
+      Serial.println("Vibration - waiting...");
       delay(500);
     }
     
-    Serial.println("  ✍ Placing marker...");
+    Serial.println("Placing marker...");
     delay(1000);
     
     currentSensor = readCurrent();
     if (currentSensor > CURRENT_THRESHOLD) {
-      Serial.println("  ⚠ High current during placement");
+      Serial.println("High current during placement");
       delay(300);
     }
     
-    Serial.println("  ✓ Marker placed!");
+    Serial.println("Marker placed!");
     delay(500);
   }
 
   returnToHome();
   
   tictactoeMode = false;
-  Serial.println("\n✅ Tic-Tac-Toe mode completed!\n");
 }
 
 // Navigate to specific cell
 void navigateToCell(int cell) {
-  Serial.print("  → Navigating to cell "); Serial.println(cell);
+  Serial.print("Navigating to cell "); Serial.println(cell);
   
   float targetDistance;
   
@@ -580,21 +578,21 @@ void navigateToCell(int cell) {
   // Lateral positioning
   int column = ((cell - 1) % 3) + 1;
   if (column == 1) {
-    Serial.println("  → Left column");
+    Serial.println("Left column");
     turnLeft();
     delay(300);
     moveForward();
     delay(400);
     stopAllMotors();
   } else if (column == 3) {
-    Serial.println("  → Right column");
+    Serial.println("Right column");
     turnRight();
     delay(300);
     moveForward();
     delay(400);
     stopAllMotors();
   } else {
-    Serial.println("  → Center column");
+    Serial.println("Center column");
   }
   
   delay(300);
@@ -656,7 +654,7 @@ void loop() {
   
   // 1. CRITICAL: Overcurrent protection
   if (currentSensor > OVERCURRENT_THRESHOLD) {
-    Serial.println("\n🚨 CRITICAL: MOTOR OVERCURRENT!");
+    Serial.println("\nCRITICAL: MOTOR OVERCURRENT!");
     stopAllMotors();
     delay(2000);
     return;
@@ -664,12 +662,12 @@ void loop() {
   
   // 2. Vibration detection
   if (vibrationDetected) {
-    Serial.println("⚠ Vibration detected...");
+    Serial.println("Vibration detected...");
     stopAllMotors();
     delay(300);
     
     if (readVibration()) {
-      Serial.println("⚠ Persistent vibration - collision!");
+      Serial.println("Persistent vibration - collision!");
       handleObstacle();
       return;
     }
@@ -677,14 +675,14 @@ void loop() {
   
   // 3. IMU acceleration check
   if (!checkIMUAcceleration()) {
-    Serial.println("⚠ IMU: Abnormal acceleration!");
+    Serial.println("IMU: Abnormal acceleration!");
     handleObstacle();
     return;
   }
   
   // 4. Proximity sensor check
   if (proximity > PROXIMITY_THRESHOLD) {
-    Serial.println("⚠ Proximity: Object very close!");
+    Serial.println("Proximity: Object very close!");
     obstacleDetected = true;
     handleObstacle();
     return;
