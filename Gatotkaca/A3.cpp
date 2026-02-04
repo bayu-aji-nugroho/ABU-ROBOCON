@@ -4,6 +4,15 @@
 #include <MPU6050.h>
 
 // ===== DEFINISI PIN =====
+// HC-SR04 Ultrasonic Sensors (4 directions)
+#define TRIG_FRONT 
+#define ECHO_FRONT 
+#define TRIG_BACK 
+#define ECHO_BACK 
+#define TRIG_LEFT 
+#define ECHO_LEFT 
+#define TRIG_RIGHT 
+#define ECHO_RIGHT 
 
 // Sensor Pins
 #define VIBRATION_PIN 34      // KW12-3 Vibration Sensor (Digital Input)
@@ -29,11 +38,16 @@
 Adafruit_APDS9960 apds;
 MPU6050 mpu;
 
-// ===== VARIABEL GLOBAL =====
 // Sensor readings
 uint16_t proximity;
 int16_t ax, ay, az, gx, gy, gz;
-float distance;
+
+// 4 Ultrasonic distances
+float distanceFront = 0.0;
+float distanceBack = 0.0;
+float distanceLeft = 0.0;
+float distanceRight = 0.0;
+
 bool vibrationDetected = false;
 float currentSensor = 0.0;
 
@@ -47,8 +61,10 @@ bool obstacleDetected = false;
 bool imuCalibrated = false;
 bool tictactoeMode = false;
 
-// Array ultrasonic 
-const uint8_t 
+// Array untuk loop ultrasonic
+const uint8_t trigPins[4] = {TRIG_FRONT, TRIG_BACK, TRIG_LEFT, TRIG_RIGHT};
+const uint8_t echoPins[4] = {ECHO_FRONT, ECHO_BACK, ECHO_LEFT, ECHO_RIGHT};
+const char* directions[4] = {"FRONT", "BACK", "LEFT", "RIGHT"};
 
 // ===== FUNGSI INISIALISASI SENSOR =====
 void initSensors() {
@@ -59,7 +75,7 @@ void initSensors() {
     Serial.println("ERROR: APDS9960 not found!");
   } else {
     apds.enableProximity(true);
-    Serial.println("APDS9960 (Proximity) initialized");
+    Serial.println("✓ APDS9960 (Proximity) initialized");
   }
   
   // Init MPU6050 - IMU (Gyro + Accelerometer)
@@ -68,17 +84,23 @@ void initSensors() {
   if (!mpu.testConnection()) {
     Serial.println("ERROR: MPU6050 not found!");
   } else {
-    Serial.println("MPU6050 (IMU) initialized");
+    Serial.println("✓ MPU6050 (IMU) initialized");
     calibrateIMU();
   }
+  // Setup 4x HC-SR04 Ultrasonic Sensors
+  for (int i = 0; i < 4; i++) {
+    pinMode(trigPins[i], OUTPUT);
+    pinMode(echoPins[i], INPUT);
+  }
+  Serial.println("✓ 4x HC-SR04 (Front/Back/Left/Right) initialized");
   
   // Setup KW12-3 - Vibration Sensor (Digital Input)
   pinMode(VIBRATION_PIN, INPUT);
-  Serial.println("KW12-3 (Vibration Sensor) initialized");
+  Serial.println("✓ KW12-3 (Vibration Sensor) initialized");
   
   // Setup ACS712 - Current Sensor (Analog Input)
   pinMode(CURRENT_SENSOR_PIN, INPUT);
-  Serial.println("ACS712 (Current Sensor) initialized");
+  Serial.println("✓ ACS712 (Current Sensor) initialized");
 }
 
 // ===== KALIBRASI IMU =====
@@ -94,59 +116,65 @@ void calibrateIMU() {
   mpu.setZGyroOffset(0);
   
   imuCalibrated = true;
-  Serial.println("IMU calibrated");
+  Serial.println("✓ IMU calibrated");
 }
 
-// ===== BACA ULTRASONIC =====
-float readUltrasonic() {
-  digitalWrite(TRIG_PIN, LOW);
+// ===== BACA SINGLE ULTRASONIC =====
+float readUltrasonicSensor(uint8_t trigPin, uint8_t echoPin) {
+  digitalWrite(trigPin, LOW);
   delayMicroseconds(2);
-  digitalWrite(TRIG_PIN, HIGH);
+  digitalWrite(trigPin, HIGH);
   delayMicroseconds(10);
-  digitalWrite(TRIG_PIN, LOW);
+  digitalWrite(trigPin, LOW);
   
-  long duration = pulseIn(ECHO_PIN, HIGH, 30000);
+  long duration = pulseIn(echoPin, HIGH, 30000);
   float dist = duration * 0.034 / 2;
   
   if (dist == 0 || dist > 400) {
-    dist = 400;
+    dist = 400;  // Max range or no echo
   }
   
   return dist;
 }
 
+// ===== BACA 4 ULTRASONIC SENSORS =====
+void readAllUltrasonics() {
+  distanceFront = readUltrasonicSensor(TRIG_FRONT, ECHO_FRONT);
+  delay(10);  // Small delay between sensor readings
+  
+  distanceBack = readUltrasonicSensor(TRIG_BACK, ECHO_BACK);
+  delay(10);
+  
+  distanceLeft = readUltrasonicSensor(TRIG_LEFT, ECHO_LEFT);
+  delay(10);
+  
+  distanceRight = readUltrasonicSensor(TRIG_RIGHT, ECHO_RIGHT);
+  delay(10);
+}
+
 // ===== BACA KW12-3 VIBRATION SENSOR =====
 bool readVibration() {
-  // KW12-3 outputs HIGH when vibration is detected
   return digitalRead(VIBRATION_PIN) == HIGH;
 }
 
 // ===== BACA ACS712 CURRENT SENSOR =====
 float readCurrent() {
-  // Read analog value (0-4095 for ESP32 12-bit ADC)
   int sensorValue = analogRead(CURRENT_SENSOR_PIN);
-  
-  // Convert to voltage (ESP32: 0-3.3V for 0-4095)
   float voltage = (sensorValue / 4095.0) * 3.3;
-  
-  // Calculate current using ACS712 formula
-  // Current = (Vout - Voffset) / Sensitivity
   float current = (voltage - ACS712_OFFSET) / ACS712_SENSITIVITY;
-  
-  return abs(current);  // Return absolute current value
+  return abs(current);
 }
 
 // ===== BACA SEMUA SENSOR =====
 void readAllSensors() {
-  
   // Baca MPU6050 - IMU
   mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
   
   // Baca APDS9960 - Proximity
   proximity = apds.readProximity();
   
-  // Baca HC-SR04 - Ultrasonic Distance
-  distance = readUltrasonic();
+  // Baca 4x HC-SR04 - Ultrasonic Distances
+  readAllUltrasonics();
   
   // Baca KW12-3 - Vibration Detection
   vibrationDetected = readVibration();
@@ -157,24 +185,64 @@ void readAllSensors() {
   // Debug output
   Serial.print("IMU ax:"); Serial.print(ax);
   Serial.print(" | Prox:"); Serial.print(proximity);
-  Serial.print(" | Dist:"); Serial.print(distance); Serial.print("cm");
-  Serial.print(" | Vib:"); Serial.print(vibrationDetected ? "YES" : "NO");
+  Serial.print(" | F:"); Serial.print(distanceFront); Serial.print("cm");
+  Serial.print(" B:"); Serial.print(distanceBack); Serial.print("cm");
+  Serial.print(" L:"); Serial.print(distanceLeft); Serial.print("cm");
+  Serial.print(" R:"); Serial.print(distanceRight); Serial.print("cm");
+  Serial.print(" | Vib:"); Serial.print(vibrationDetected ? "Y" : "N");
   Serial.print(" | Cur:"); Serial.print(currentSensor); Serial.println("A");
 }
 
 // ===== CEK AKSELERASI IMU =====
 bool checkIMUAcceleration() {
-  float accel_x = ax / 16384.0;  // konversi ke g
+  float accel_x = ax / 16384.0;
   float accel_y = ay / 16384.0;
   float accel_z = az / 16384.0;
   
   float total_accel = sqrt(accel_x*accel_x + accel_y*accel_y + accel_z*accel_z);
   
-  // Normal gravity is ~1g, check if deviation is too high
   if (abs(total_accel - 1.0) > IMU_ACCEL_THRESHOLD) {
-    return false;  // Abnormal acceleration detected
+    return false;
   }
   return true;
+}
+// ===== CEK OBSTACLE DARI SEMUA ARAH =====
+bool checkObstacleAnyDirection() {
+  // Check if any ultrasonic sensor detects obstacle
+  if (distanceFront < OBSTACLE_DISTANCE) {
+    Serial.println("Obstacle FRONT!");
+    return true;
+  }
+  if (distanceBack < OBSTACLE_DISTANCE) {
+    Serial.println("Obstacle BACK!");
+    return true;
+  }
+  if (distanceLeft < OBSTACLE_DISTANCE) {
+    Serial.println("Obstacle LEFT!");
+    return true;
+  }
+  if (distanceRight < OBSTACLE_DISTANCE) {
+    Serial.println("Obstacle RIGHT!");
+    return true;
+  }
+  return false;
+}
+
+// ===== CARI ARAH TERBAIK (JARAK TERJAUH) =====
+int findBestDirection() {
+  // Return index: 0=Front, 1=Back, 2=Left, 3=Right
+  float distances[4] = {distanceFront, distanceBack, distanceLeft, distanceRight};
+  int bestDir = 0;
+  float maxDist = distances[0];
+  
+  for (int i = 1; i < 4; i++) {
+    if (distances[i] > maxDist) {
+      maxDist = distances[i];
+      bestDir = i;
+    }
+  }
+  
+  return bestDir;
 }
 
 // ===== KONTROL MOTOR =====
@@ -218,132 +286,158 @@ void turnRight() {
   Serial.println("Motors: TURN RIGHT");
 }
 
-// ===== HANDLE OBSTACLE =====
+// ===== HANDLE OBSTACLE (DENGAN 4 SENSOR) =====
 void handleObstacle() {
-  Serial.println("\n=== OBSTACLE DETECTED (Movement Mode) ===");
   stopAllMotors();
   delay(500);
   
-  // Check vibration sensor (KW12-3) - might indicate collision
+  // Display current sensor readings
+  Serial.println("\n📊 Current Distances:");
+  Serial.print("  Front: "); Serial.print(distanceFront); Serial.println(" cm");
+  Serial.print("  Back:  "); Serial.print(distanceBack); Serial.println(" cm");
+  Serial.print("  Left:  "); Serial.print(distanceLeft); Serial.println(" cm");
+  Serial.print("  Right: "); Serial.print(distanceRight); Serial.println(" cm");
+  
+  // Check vibration sensor (KW12-3)
   if (vibrationDetected) {
-    Serial.println("VIBRATION DETECTED! Possible collision!");
+    Serial.println("VIBRATION! Possible collision!");
     delay(200);
   }
   
-  // Check current sensor (ACS712) - motor stall detection
+  // Check current sensor (ACS712)
   if (currentSensor > OVERCURRENT_THRESHOLD) {
-    Serial.println("OVERCURRENT! Motor may be stalled!");
+    Serial.println("OVERCURRENT! Motor stalled!");
     stopAllMotors();
     delay(1000);
     return;
   }
   
-  // Mundur sedikit
-  Serial.println("Moving backward to avoid obstacle...");
-  moveBackward();
-  delay(1000);
-  stopAllMotors();
-  delay(500);
-  
+  // Check for errors
   bool hasError = false;
   
-  // Periksa sensor untuk error/warning
-  // 1. Check IMU for abnormal tilt/orientation
+  // 1. Check IMU
   float accel_total = sqrt((ax/16384.0)*(ax/16384.0) + 
                            (ay/16384.0)*(ay/16384.0) + 
                            (az/16384.0)*(az/16384.0));
   if (abs(accel_total - 1.0) > IMU_ACCEL_THRESHOLD) {
-    Serial.println("IMU Error: Abnormal acceleration/tilt");
+    Serial.println("IMU Error: Abnormal tilt");
     hasError = true;
   }
   
-  // 2. Check proximity sensor for very close objects
+  // 2. Check proximity
   if (proximity > 150) {
-    Serial.println("Proximity Error: Object very close");
+    Serial.println("Proximity: Object very close");
     hasError = true;
   }
   
-  // 3. Check vibration persistence
+  // 3. Check vibration
   if (vibrationDetected) {
-    Serial.println("Vibration Error: Continuous vibration");
+    Serial.println("Vibration: Continuous");
     hasError = true;
   }
   
-  // 4. Check current sensor for motor issues
+  // 4. Check current
   if (currentSensor > CURRENT_THRESHOLD) {
-    Serial.println("Current Error: Motor drawing high current");
+    Serial.println("Current: High draw");
     hasError = true;
   }
   
-  // Scan kiri dan kanan untuk cari jalan
-  float leftDistance, rightDistance;
+  // === INTELLIGENT NAVIGATION BASED ON 4 SENSORS ===
+  Serial.println("\nFinding best escape route...");
   
-  // Scan kiri
-  Serial.println("Scanning left...");
-  turnLeft();
-  delay(500);
-  stopAllMotors();
-  delay(300);
-  leftDistance = readUltrasonic();
-  Serial.print("Left distance: "); Serial.print(leftDistance); Serial.println("cm");
+  // Find direction with most space
+  int bestDir = findBestDirection();
+  float distances[4] = {distanceFront, distanceBack, distanceLeft, distanceRight};
   
-  // Kembali ke tengah
-  turnRight();
-  delay(500);
-  stopAllMotors();
-  delay(300);
+  Serial.print("✓ Best direction: "); Serial.print(directions[bestDir]);
+  Serial.print(" ("); Serial.print(distances[bestDir]); Serial.println(" cm)");
   
-  // Scan kanan
-  Serial.println("Scanning right...");
-  turnRight();
-  delay(500);
-  stopAllMotors();
-  delay(300);
-  rightDistance = readUltrasonic();
-  Serial.print("Right distance: "); Serial.print(rightDistance); Serial.println("cm");
+  // If front is blocked, move backward first
+  if (distanceFront < OBSTACLE_DISTANCE && distanceBack > OBSTACLE_DISTANCE) {
+    Serial.println("→ Moving BACKWARD to create space...");
+    moveBackward();
+    delay(1000);
+    stopAllMotors();
+    delay(500);
+  }
   
-  // Kembali ke tengah
-  turnLeft();
-  delay(500);
-  stopAllMotors();
-  delay(300);
-  
-  // Decide direction based on error status and distance scan
+  // Navigate to best direction
   if (hasError) {
-    Serial.println("Error mode: Using safe fallback - turn left");
+    // Error mode: use safe fallback
+    Serial.println("⚠ Error mode: Safe fallback - turning left");
     turnLeft();
-    delay(1200);  // Longer turn for safety
+    delay(1200);
   } else {
-    // Choose direction with more space
-    if (leftDistance > rightDistance) {
-      Serial.println("Left path is clearer - turning left");
-      turnLeft();
-      delay(800);
-    } else {
-      Serial.println("Right path is clearer - turning right");
-      turnRight();
-      delay(800);
+    // Normal mode: navigate to best direction
+    switch(bestDir) {
+      case 0:  // Front is best
+        Serial.println("→ Path ahead is clear - moving FORWARD");
+        // Already facing forward, will move in main loop
+        break;
+        
+      case 1:  // Back is best
+        Serial.println("→ Turning around (180°)");
+        turnRight();
+        delay(1600);  // ~180 degree turn
+        break;
+        
+      case 2:  // Left is best
+        Serial.println("→ Turning LEFT (90°)");
+        turnLeft();
+        delay(800);
+        break;
+        
+      case 3:  // Right is best
+        Serial.println("→ Turning RIGHT (90°)");
+        turnRight();
+        delay(800);
+        break;
     }
   }
   
   stopAllMotors();
   delay(300);
   
-  Serial.println("=== Obstacle avoidance complete ===\n");
+  // Re-check sensors after maneuvering
+  readAllUltrasonics();
+  Serial.println("\n📊 After maneuver:");
+  Serial.print("  Front: "); Serial.print(distanceFront); Serial.println(" cm");
 }
 
-// ===== TIC-TAC-TOE GAME MODE (FLOWCHART KANAN) =====
+// ===== TIC-TAC-TOE GAME MODE =====
 void performTicTacToeMode() {
   
   tictactoeMode = true;
-  // Use HC-SR04 to navigate to board
-  while (distance > 20.0 && distance < 200.0) {
-    distance = readUltrasonic();
-    Serial.print("Distance to board: "); Serial.print(distance); Serial.println("cm");
+  
+  // STEP 1: Approach board using FRONT sensor
+  Serial.println("Step 1: Approaching game board...");
+  
+  while (distanceFront > 20.0 && distanceFront < 200.0) {
+    readAllUltrasonics();
+    Serial.print("Distance to board: "); Serial.print(distanceFront); Serial.println(" cm");
     
-    if (distance > 30.0) {
+    // Check side clearance
+    if (distanceLeft < 15.0 || distanceRight < 15.0) {
+      Serial.println("⚠ Too close to side - adjusting...");
+      stopAllMotors();
+      delay(500);
+      
+      if (distanceLeft < distanceRight) {
+        // Adjust right
+        turnRight();
+        delay(200);
+        stopAllMotors();
+      } else {
+        // Adjust left
+        turnLeft();
+        delay(200);
+        stopAllMotors();
+      }
+    }
+    
+    if (distanceFront > 30.0) {
       moveForward();
-    } else if (distance > 20.0) {
+    } else if (distanceFront > 20.0) {
       analogWrite(MOTOR_LEFT_FWD, MOTOR_SPEED/3);
       analogWrite(MOTOR_RIGHT_FWD, MOTOR_SPEED/3);
       digitalWrite(MOTOR_LEFT_BWD, LOW);
@@ -352,26 +446,26 @@ void performTicTacToeMode() {
     delay(100);
   }
   stopAllMotors();
-  Serial.println("Reached game board position!");
+  Serial.println("✓ Reached game board position!");
   delay(500);
   
-  // STEP 2: Verify robot orientation using MPU6050
+  // STEP 2: Check orientation (MPU6050)
+  Serial.println("\nStep 2: Checking orientation...");
   mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
   
   float accel_z = az / 16384.0;
-  if (abs(accel_z) < 0.8) {  // Check if robot is tilted
-    Serial.println("Robot orientation abnormal - adjusting...");
-    // Adjust position
+  if (abs(accel_z) < 0.8) {
+    Serial.println("⚠ Robot tilted - adjusting...");
     moveBackward();
     delay(300);
     stopAllMotors();
     delay(500);
   } else {
-    Serial.println("Robot orientation OK");
+    Serial.println("✓ Robot orientation OK");
   }
   
-  // STEP 3: Check vibration stability (KW12-3)
-  Serial.println("Checking surface stability (KW12-3)...");
+  // STEP 3: Surface stability (KW12-3)
+  Serial.println("\nStep 3: Checking surface stability...");
   int vibrationCount = 0;
   for (int i = 0; i < 10; i++) {
     if (readVibration()) vibrationCount++;
@@ -379,25 +473,23 @@ void performTicTacToeMode() {
   }
   
   if (vibrationCount > 3) {
-    Serial.println("Surface unstable - high vibration detected");
-    Serial.println("Moving to stable position...");
+    Serial.println("⚠ Unstable surface - relocating...");
     moveForward();
     delay(500);
     stopAllMotors();
     delay(300);
   } else {
-    Serial.println("Surface stable - ready for game");
+    Serial.println("✓ Surface stable");
   }
   
-  // STEP 4: Check motor current status (ACS712)
-  Serial.println("Motor system check (ACS712)...");
+  // STEP 4: Motor check (ACS712)
+  Serial.println("\nStep 4: Motor system check...");
   stopAllMotors();
   delay(500);
   
   float idleCurrent = readCurrent();
   Serial.print("Idle current: "); Serial.print(idleCurrent); Serial.println("A");
   
-  // Test motor current draw
   moveForward();
   delay(200);
   float activeCurrent = readCurrent();
@@ -406,85 +498,77 @@ void performTicTacToeMode() {
   Serial.print("Active current: "); Serial.print(activeCurrent); Serial.println("A");
   
   if (activeCurrent > OVERCURRENT_THRESHOLD) {
-    Serial.println("Motor overcurrent - system abort!");
-    delay(1000);
+    Serial.println("Overcurrent - ABORT!");
     tictactoeMode = false;
     return;
   } else if (activeCurrent < 0.1) {
-    Serial.println("Motor not responding - check connections!");
-    delay(1000);
+    Serial.println("No motor response - ABORT!");
     tictactoeMode = false;
     return;
   } else {
-    Serial.println("Motor current normal");
+    Serial.println("✓ Motor current normal");
   }
   
-  // Simulate game moves with sensor verification
-  int moves[] = {5, 1, 3, 7, 9}; // Center, corners strategy
+  // STEP 5: Play game
+  
+  int moves[] = {5, 1, 3, 7, 9};
   
   for (int i = 0; i < 5; i++) {
-    Serial.print("\nMove "); Serial.print(i+1); 
-    Serial.print(": Positioning to cell "); Serial.println(moves[i]);
+    Serial.print("\n🎯 Move "); Serial.print(i+1);
+    Serial.print(": Cell "); Serial.println(moves[i]);
     
-    // Navigate to position using ultrasonic and IMU
     navigateToCell(moves[i]);
     
-    // Check vibration before placing marker
     if (readVibration()) {
-      Serial.println("Vibration detected - waiting for stability...");
+      Serial.println("⚠ Vibration - waiting...");
       delay(500);
     }
     
-    // Check current during marker placement
-    Serial.println("Placing marker...");
-    // Simulate marker placement mechanism
+    Serial.println("  ✍ Placing marker...");
     delay(1000);
     
     currentSensor = readCurrent();
     if (currentSensor > CURRENT_THRESHOLD) {
-      Serial.println("High current during placement - checking...");
+      Serial.println("  ⚠ High current during placement");
       delay(300);
     }
     
-    Serial.println("Marker placed successfully!");
+    Serial.println("  ✓ Marker placed!");
     delay(500);
   }
-  
+
   returnToHome();
   
   tictactoeMode = false;
-  Serial.println("✓ Tic-Tac-Toe mode completed!\n");
+  Serial.println("\n✅ Tic-Tac-Toe mode completed!\n");
 }
 
-// Helper function to navigate to specific cell
+// Navigate to specific cell
 void navigateToCell(int cell) {
+  Serial.print("  → Navigating to cell "); Serial.println(cell);
   
-  Serial.print("Moving to cell "); Serial.println(cell);
-  
-  // Use ultrasonic to measure position
   float targetDistance;
   
-  // Simplified navigation logic
   switch(cell) {
-    case 1: case 2: case 3: // Top row
+    case 1: case 2: case 3:
       targetDistance = 40.0;
       break;
-    case 4: case 5: case 6: // Middle row
+    case 4: case 5: case 6:
       targetDistance = 25.0;
       break;
-    case 7: case 8: case 9: // Bottom row
+    case 7: case 8: case 9:
       targetDistance = 10.0;
       break;
     default:
       targetDistance = 25.0;
   }
   
-  // Navigate forward/backward to reach target distance
-  distance = readUltrasonic();
-  while (abs(distance - targetDistance) > 2.0) {
-    distance = readUltrasonic();
+  // Navigate forward/backward using FRONT sensor
+  readAllUltrasonics();
+  while (abs(distanceFront - targetDistance) > 2.0) {
+    readAllUltrasonics();
     
-    if (distance > targetDistance) {
+    if (distanceFront > targetDistance) {
       moveForward();
     } else {
       moveBackward();
@@ -493,51 +577,49 @@ void navigateToCell(int cell) {
   }
   stopAllMotors();
   
-  // Lateral positioning (left/right)
+  // Lateral positioning
   int column = ((cell - 1) % 3) + 1;
   if (column == 1) {
-    Serial.println("Adjusting to left column");
+    Serial.println("  → Left column");
     turnLeft();
     delay(300);
     moveForward();
     delay(400);
     stopAllMotors();
   } else if (column == 3) {
-    Serial.println("Adjusting to right column");
+    Serial.println("  → Right column");
     turnRight();
     delay(300);
     moveForward();
     delay(400);
     stopAllMotors();
   } else {
-    Serial.println("Center column - no lateral adjustment");
+    Serial.println("  → Center column");
   }
   
   delay(300);
 }
 
-// Helper function to return to home position
+// Return to home using BACK sensor
 void returnToHome() {
-  Serial.println("Navigating back to home position...");
-  // Use ultrasonic to find safe distance
+  Serial.println("Returning to home...");
+  
   moveBackward();
   delay(1000);
   
-  while (distance < 50.0) {
-    distance = readUltrasonic();
+  while (distanceFront < 50.0) {
+    readAllUltrasonics();
     moveBackward();
     delay(100);
   }
   
   stopAllMotors();
   
-  // Final sensor check
-  Serial.print("  Distance: "); Serial.print(distance); Serial.println("cm");
-  Serial.print("  Vibration: "); Serial.println(readVibration() ? "Detected" : "None");
-  Serial.print("  Current: "); Serial.print(readCurrent()); Serial.println("A");
-  
-  mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
-  Serial.print("  IMU Z-axis: "); Serial.println(az);
+  // Final check
+  readAllSensors();
+  Serial.print("  Front: "); Serial.print(distanceFront); Serial.println(" cm");
+  Serial.print("  Vibration: "); Serial.println(vibrationDetected ? "Yes" : "No");
+  Serial.print("  Current: "); Serial.print(currentSensor); Serial.println(" A");
 }
 
 // ===== SETUP =====
@@ -545,19 +627,15 @@ void setup() {
   Serial.begin(115200);
   Wire.begin();
   
-  // Setup pin motor
+  // Setup motor pins
   pinMode(MOTOR_LEFT_FWD, OUTPUT);
   pinMode(MOTOR_LEFT_BWD, OUTPUT);
   pinMode(MOTOR_RIGHT_FWD, OUTPUT);
   pinMode(MOTOR_RIGHT_BWD, OUTPUT);
   
-  // Setup ultrasonic
-  pinMode(TRIG_PIN, OUTPUT);
-  pinMode(ECHO_PIN, INPUT);
-  
   delay(1000);
   
-  // Inisialisasi semua sensor
+  // Initialize all sensors
   initSensors();
   
   delay(2000);
@@ -565,61 +643,79 @@ void setup() {
 }
 
 void loop() {
-  // START
   if (!systemRunning) {
     stopAllMotors();
     return;
   }
   
-  // Baca semua sensor secara periodik
+  // Read all sensors periodically
   if (millis() - lastSensorRead >= SENSOR_INTERVAL) {
     readAllSensors();
     lastSensorRead = millis();
   }
   
-  // CRITICAL: Check current sensor for motor protection
+  // 1. CRITICAL: Overcurrent protection
   if (currentSensor > OVERCURRENT_THRESHOLD) {
-    Serial.println("CRITICAL: MOTOR OVERCURRENT DETECTED!");
+    Serial.println("\n🚨 CRITICAL: MOTOR OVERCURRENT!");
     stopAllMotors();
     delay(2000);
     return;
   }
   
-  // Check vibration sensor (KW12-3) - might indicate collision or unstable surface
+  // 2. Vibration detection
   if (vibrationDetected) {
-    Serial.println("Vibration detected - checking stability...");
+    Serial.println("⚠ Vibration detected...");
     stopAllMotors();
     delay(300);
     
-    // Verify if it's persistent vibration
-    bool stillVibrating = readVibration();
-    if (stillVibrating) {
-      Serial.println("Persistent vibration - possible collision!");
+    if (readVibration()) {
+      Serial.println("⚠ Persistent vibration - collision!");
       handleObstacle();
       return;
     }
   }
   
-  // Check IMU (MPU6050) for abnormal acceleration/tilt
+  // 3. IMU acceleration check
   if (!checkIMUAcceleration()) {
-    Serial.println("IMU Alert: Abnormal acceleration/orientation!");
+    Serial.println("⚠ IMU: Abnormal acceleration!");
     handleObstacle();
     return;
   }
   
-  // Check proximity sensor (APDS9960) and ultrasonic (HC-SR04) for obstacles
-  if (proximity > PROXIMITY_THRESHOLD || distance < OBSTACLE_DISTANCE) {
+  // 4. Proximity sensor check
+  if (proximity > PROXIMITY_THRESHOLD) {
+    Serial.println("⚠ Proximity: Object very close!");
     obstacleDetected = true;
-    Serial.println("Obstacle detected by proximity/ultrasonic sensors");
+    handleObstacle();
+    return;
+  }
+  
+  // 5. Multi-directional obstacle check
+  if (checkObstacleAnyDirection()) {
+    obstacleDetected = true;
     handleObstacle();
   } else {
     obstacleDetected = false;
-    
-    // Normal movement - check distance for speed control
-    if (distance > SAFE_DISTANCE) {
-      moveForward();
-    } else if (distance > OBSTACLE_DISTANCE) {
-      // Moderate distance - reduced speed for safety
+    if (distanceFront > SAFE_DISTANCE) {
+      // Safe distance - full speed
+      if (distanceLeft < 20.0) {
+        // Too close to left wall - adjust right
+        analogWrite(MOTOR_LEFT_FWD, MOTOR_SPEED);
+        analogWrite(MOTOR_RIGHT_FWD, MOTOR_SPEED * 0.7);
+        digitalWrite(MOTOR_LEFT_BWD, LOW);
+        digitalWrite(MOTOR_RIGHT_BWD, LOW);
+      } else if (distanceRight < 20.0) {
+        // Too close to right wall - adjust left
+        analogWrite(MOTOR_LEFT_FWD, MOTOR_SPEED * 0.7);
+        analogWrite(MOTOR_RIGHT_FWD, MOTOR_SPEED);
+        digitalWrite(MOTOR_LEFT_BWD, LOW);
+        digitalWrite(MOTOR_RIGHT_BWD, LOW);
+      } else {
+        // Clear path - move straight
+        moveForward();
+      }
+    } else if (distanceFront > OBSTACLE_DISTANCE) {
+      // Moderate distance - reduced speed
       analogWrite(MOTOR_LEFT_FWD, MOTOR_SPEED/2);
       analogWrite(MOTOR_RIGHT_FWD, MOTOR_SPEED/2);
       digitalWrite(MOTOR_LEFT_BWD, LOW);
@@ -633,15 +729,16 @@ void loop() {
   static unsigned long lastGameMode = 0;
   static bool nearHomePosition = false;
   
-  // Check if robot is near home position (distance > 80cm means far from obstacles)
-  if (distance > 80.0 && distance < 100.0 && !obstacleDetected) {
+  // Home position: far from all obstacles
+  if (distanceFront > 80.0 && distanceBack > 80.0 && 
+      distanceLeft > 40.0 && distanceRight > 40.0 && !obstacleDetected) {
     nearHomePosition = true;
   }
   
-  // Trigger tic-tac-toe mode periodically or when near home
   if ((millis() - lastGameMode > 60000) || 
       (nearHomePosition && (millis() - lastGameMode > 30000))) {
-
+    
+    Serial.println("\n🎮 Initiating Tic-Tac-Toe Mode...");
     stopAllMotors();
     delay(1000);
     
@@ -651,5 +748,5 @@ void loop() {
     nearHomePosition = false;
   }
   
-  delay(50);  // Small delay for stability
+  delay(50);
 }
