@@ -1,4 +1,4 @@
-//udah sampai gerak dasar robot, tinggal benerin eror+mikirin konsep robot naik ke forest
+//udah sampai algoritma naik ke forest, tapi masih kurang sempurna
 
 // --- KONFIGURASI PIN MOTOR ---
 // FL = Front Left, FR = Front Right, BL = Back Left, BR = Back Right
@@ -11,6 +11,10 @@ const int BR_PWM = 12; const int BR_DIR = 13;
 const int TRIG_KIRI = 2;  const int ECHO_KIRI = 3;
 const int TRIG_KANAN = 4; const int ECHO_KANAN = 5;
 
+// --- PIN TAMBAHAN UNTUK KAMERA ---
+const int PIN_FOREST_LURUS = A0; // Input dari kamera: High jika forest tengah lurus
+const int PIN_ADA_KOTAK = A1;    // Input dari kamera: High jika ada kotak di atas forest
+
 class robotgatot{
 public:
     void init() {
@@ -22,17 +26,17 @@ public:
 
     void move(int fl, int fr, int bl, int br){
         //maju=high mundur=low
-        digitalwrite(FL_DIR, fl >= 0 ? HIGH : LOW);
-        analogwrite(FL_PWM, abs(fl));
+        digitalWrite(FL_DIR, fl >= 0 ? HIGH : LOW);
+        analogWrite(FL_PWM, abs(fl));
 
-        digitalwrite(FR_DIR, fr >= 0 ? HIGH : LOW);
-        analogwrite(FR_PWM, abs(fr));
+        digitalWrite(FR_DIR, fr >= 0 ? HIGH : LOW);
+        analogWrite(FR_PWM, abs(fr));
 
-        digitalwrite(BL_DIR, bl >= 0 ? HIGH : LOW);
-        analogwrite(BL_PWM, abs(bl));
+        digitalWrite(BL_DIR, bl >= 0 ? HIGH : LOW);
+        analogWrite(BL_PWM, abs(bl));
 
-        digitalwrite(BR_DIR, br >= 0 ? HIGH : LOW);
-        analogwrite(BR_PWM, abs(br));
+        digitalWrite(BR_DIR, br >= 0 ? HIGH : LOW);
+        analogWrite(BR_PWM, abs(br));
 
     }
 //FUNGSI GERAK DASAR RODA
@@ -66,7 +70,7 @@ void setup() {
     Serial.begin(9600);
 
     // 1. Maju 60 cm
-    gatot.maju(150);
+    gatot.maju(600);
     delay(2000); 
     gatot.berhenti();
 
@@ -74,8 +78,6 @@ void setup() {
     long dikiri = gatot.bacaUltrasonic(TRIG_KIRI, ECHO_KIRI);
     long dikanan = gatot.bacaUltrasonic(TRIG_KANAN, ECHO_KANAN);
 
-gatot maju(600);
-delay(1000);
 if (dikiri < 1000) { 
     rakKiri = true;
     gatot.putarkiri(90);
@@ -87,12 +89,15 @@ else if (dikanan < 1000) {
     gatot.putarkanan(90);
     gatot.maju(600);
 }
+else {
+    gatot.berhenti
+}
 
 for (int i=0; i<4; i++) {
-    delay(5000);
+    delay(3000);
 
     gatot.putarbalik;
-    delay(1000);
+    delay(2000);
 
     if (i<3);{
         gatot.putarbalik;
@@ -111,6 +116,32 @@ else {
     gatot.maju(2000);
     gatot.putarkiri(90);
 }
+
+//algortima buat naik ke forest menggunakan kamera
+bool diDepanForest = false;
+    while (!diDepanForest) {
+        if (digitalRead(PIN_FOREST_LURUS) == HIGH) {
+            gatot.berhenti();
+            diDepanForest = true;
+        } else {
+            gatot.maju(100); // Pelan-pelan mencari posisi forest
+        }
+    }
+
+    // Cek keberadaan kotak di atas forest sebelum naik
+    if (digitalRead(PIN_ADA_KOTAK) == HIGH) {
+        gatot.berhenti();
+        delay(4000); // Delay robot mengambil kotak (sesuai instruksimu)
+        naikKeForest();
+    } else {
+        naikKeForest(); // Langsung naik jika kosong
+    }
+
+void naikKeForest() {
+    //di isi sesuai gerak angkat robot 
+}
+
+void loop() {}
 }
 
 
