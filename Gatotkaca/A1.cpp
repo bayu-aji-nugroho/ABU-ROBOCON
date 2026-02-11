@@ -1,5 +1,5 @@
 //udah sampai algoritma naik ke forest, tapi masih kurang sempurna
-
+#include <Arduino.h>
 // --- KONFIGURASI PIN MOTOR ---
 // FL = Front Left, FR = Front Right, BL = Back Left, BR = Back Right
 const int FL_PWM = 6;  const int FL_DIR = 7;
@@ -50,7 +50,7 @@ public:
 
     void putarbalik() {
         putarkanan(150); 
-        delay (1200); // Kalibrasi manual sampai tepat 180 derajat
+        delay(1200); // Kalibrasi manual sampai tepat 180 derajat
         berhenti();
     }
 
@@ -90,17 +90,17 @@ else if (dikanan < 1000) {
     gatot.maju(600);
 }
 else {
-    gatot.berhenti
+    gatot.berhenti();
 }
 
 for (int i=0; i<4; i++) {
-    delay(3000);
+    gatot.berhenti();
 
-    gatot.putarbalik;
+    gatot.putarbalik();
     delay(2000);
 
     if (i<3);{
-        gatot.putarbalik;
+        gatot.putarbalik();
     }    
 }
 
@@ -131,7 +131,6 @@ bool diDepanForest = false;
     // Cek keberadaan kotak di atas forest sebelum naik
     if (digitalRead(PIN_ADA_KOTAK) == HIGH) {
         gatot.berhenti();
-        delay(4000); // Delay robot mengambil kotak (sesuai instruksimu)
         naikKeForest();
     } else {
         naikKeForest(); // Langsung naik jika kosong
