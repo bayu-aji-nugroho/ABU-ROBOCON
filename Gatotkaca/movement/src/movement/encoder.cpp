@@ -1,8 +1,8 @@
 #include "../lib/movementLIB/encoder.h"
 
 
-Encoder::Encoder(int a, int b, float pulses)
-    : pinA(a), pinB(b), ppr(pulses) {}
+Encoder::Encoder(int a, int b, float pulses, String name)
+    : pinA(a), pinB(b), ppr(pulses), name(name) {}
 
 void Encoder::begin() {
     
@@ -15,12 +15,16 @@ void Encoder::begin() {
 void Encoder::update() {
     unsigned long now = micros();
     float deltaTime = (now - lastUpdateMicros) / 1000000.0; // Konversi ke detik
+    static unsigned long lastDebug = 0;
+    if (millis() - lastDebug > 100) {
+        lastDebug = millis();
+        Serial.printf(">%scount:%.1f",this->name,encoder.getCount());
+    }
 
     if (deltaTime > 0.01) { // Hitung setiap 10ms
         long currentCount = (long) encoder.getCount();
         long deltaTicks = currentCount - lastCount;
 
-        
         float instantRPM = (deltaTicks / ppr) / (deltaTime / 60.0);
         
         const float alpha = 0.5; 

@@ -12,12 +12,14 @@ class Movement{
         Encoder* encoder;
         MyPID* pid;
         int RPWM,LPWM;
+        String name;
         
         float nilai_PWM_ke_roda;
        
 
     public:
         Movement(
+            String name,
             float Kp, float Ki, float Kd, int chanelA, int ChanelB,
               float ppr,int RPWM, int LPWM);
          ~Movement() { delete encoder; delete pid;}

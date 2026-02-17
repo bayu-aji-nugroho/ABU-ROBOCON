@@ -11,9 +11,10 @@ class Encoder{
         long lastCount = 0;
         unsigned long lastUpdateMicros = 0;
         float RPMsekarang = 0;
+        String name;
 
     public:
-        Encoder(int a, int b, float pulses);
+        Encoder(int a, int b, float pulses,String name);
         void begin();
         void update(); 
         float getRPM() const; // mengoutputkan rpm

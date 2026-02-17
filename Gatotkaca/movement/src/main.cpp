@@ -13,13 +13,18 @@
 
 
 Gyroscope* gyro;
-Movement *Fr, *Fl, *Br, *Bl;
+//         name  Kp    Ki    Kd    chA  chB  ppr  rpwm  lpwm
+Movement Fr("Fr",0.1f, 0.01f, 0.1f, 34, 35, PPR, 12, 13);
+Movement Fl("Fl", 0.1f, 0.01f, 0.1f, 36, 39, PPR, 14, 27);
+Movement Br("Br", 0.1f, 0.01f, 0.1f, 16, 17, PPR, 19, 18);
+Movement Bl("Bl", 0.1f, 0.01f, 0.1f, 32, 33, PPR, 26, 25);
 
 float targetHeading    = 0.0f; //target awal
 bool  headingLockActive = true;
 
 void move(int forward, int strafe, int turn);
 void control();
+void stop(); // kecepatan roda semua 0
 
 void setup() {
     Serial.begin(115200);
@@ -29,27 +34,17 @@ void setup() {
 
     PS4.begin("40:1A:58:62:D6:A2");
     Serial.println(F("Program berjalan"));
-
     
     gyro = new Gyroscope(SDA_PIN, SCL_PIN);
     
-    if (!gyro->begin()) {
-        Serial.println("Gyroscope");
-        while(1); 
-    }
+    if (gyro->begin()) Serial.println("(1)Gyroscope terpasang");
+    else if(!gyro->begin()) Serial.println("(1)error Gyroscope tidak terpasang!");
 
-    //                Kp    Ki    Kd    chA  chB  ppr  rpwm  lpwm
-    Fr = new Movement(0.1f, 0.01f, 0.1f, 34, 35, PPR, 12, 13);
-    Fl = new Movement(0.1f, 0.01f, 0.1f, 36, 39, PPR, 14, 27);
-    Br = new Movement(0.1f, 0.01f, 0.1f, 16, 17, PPR, 19, 18);
-    Bl = new Movement(0.1f, 0.01f, 0.1f, 32, 33, PPR, 26, 25);
+    
 
-    Fr->begin(); Fl->begin(); Br->begin(); Bl->begin();
-
+    Fr.begin(); Fl.begin(); Br.begin(); Bl.begin();
     gyro->resetHeading(); 
     targetHeading = 0.0f;
-
-    Serial.println(F("semua siap!!!"));
 }
 
 void loop() {
@@ -58,12 +53,13 @@ void loop() {
 
     // matikan semua motor jika robot miring >20° 
     if (gyro->isTilted(20.0f)) {
-        Fr->update(0); Fl->update(0); Br->update(0); Bl->update(0);
-        Fr->resetPID(); Fl->resetPID(); Br->resetPID(); Bl->resetPID();
+        stop();
+        Fr.resetPID(); Fl.resetPID(); Br.resetPID(); Bl.resetPID();
         return;
     }
 
     if (PS4.isConnected()) control();
+    else stop();
 
     static unsigned long lastDebug = 0;
     if (millis() - lastDebug > 100) {
@@ -77,10 +73,10 @@ void loop() {
 }
 
 void move(int forward, int strafe, int turn) {
-    const int DEADZONE = 8; 
+    const int DEADZONE = 10; 
 
     if (abs(turn) > DEADZONE) {
-        headingLockActive = false;
+        headingLockActive = false; // 
 
         float headingChange = (turn / 127.0f) * 2.0f; 
         targetHeading += headingChange;
@@ -98,8 +94,8 @@ void move(int forward, int strafe, int turn) {
 
     // jika nilai joystick < DEADZONE maka semua roda berhenti
     if (abs(forward) < DEADZONE && abs(strafe) < DEADZONE && abs(turn) < DEADZONE) {
-        Fr->resetPID(); Fl->resetPID(); Br->resetPID(); Bl->resetPID();
-        Fr->update(0); Fl->update(0); Br->update(0); Bl->update(0);
+        Fr.resetPID(); Fl.resetPID(); Br.resetPID(); Bl.resetPID();
+        stop();
         return;
     }
     
@@ -113,8 +109,10 @@ void move(int forward, int strafe, int turn) {
     float scale  = (maxVal > 127.0f) ? (100.0f / maxVal) : (100.0f / 127.0f);
 
     vfl *= scale; vfr *= scale; vbl *= scale; vbr *= scale;
-    Fr->update(vfr); Fl->update(vfl); Br->update(vbr); Bl->update(vbl);
+    Fr.update(vfr); Fl.update(vfl); Br.update(vbr); Bl.update(vbl);
 }
+
+void stop() {Fr.update(0); Fl.update(0); Br.update(0); Bl.update(0);}
 
 
 void control() {
