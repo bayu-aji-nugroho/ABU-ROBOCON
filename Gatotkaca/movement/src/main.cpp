@@ -1,155 +1,135 @@
 #include <Arduino.h>
-#include <../lib/movementLIB/movement.h>
 #include <HardwareSerial.h>
 #include <PS4Controller.h>
 #include <nvs_flash.h>
 
-Movement *Fr,*Fl,*Br, *Bl;
-void control();
-int ppr = 7;
+#include "../lib/movementLIB/gyroscope.h"
+#include "../lib/movementLIB/movement.h"
 
-float targetHeading = 0.0;     
-bool headingLockActive = true;
+
+#define PPR         7      
+#define SDA_PIN     21      
+#define SCL_PIN     22     
+
+
+Gyroscope* gyro;
+Movement *Fr, *Fl, *Br, *Bl;
+
+float targetHeading    = 0.0f; //target awal
+bool  headingLockActive = true;
+
+void move(int forward, int strafe, int turn);
+void control();
 
 void setup() {
-  Serial.begin(115200);
-  nvs_flash_erase(); 
-  nvs_flash_init();
-  delay(2000);
+    Serial.begin(115200);
+    nvs_flash_erase();
+    nvs_flash_init();
+    delay(2000);
 
-  PS4.begin("40:1A:58:62:D6:A2"); 
-  
-  Serial.println("program berjalan");
-  
-  // Kp,Ki,Kd, chanel A, chanel B, ppr, rpwm, lpwm
-  //note cha a dan b pake resistor 4.7k Ohm yang dihubungkan ke 3.3v
-  Fr = new Movement(0.1,0.01,0.1,34,35,ppr,12,13);
-  // Fl = new Movement(0.1,0.01,0.1,36,39,ppr,14,27);
-  // Bl = new Movement(0.1, 0.01, 0.1, 32, 33, ppr, 26, 25);
-  // Br = new Movement(0.1, 0.01, 0.1, 16, 17, ppr, 19, 18);
+    PS4.begin("40:1A:58:62:D6:A2");
+    Serial.println(F("Program berjalan"));
 
-  Fr->begin();
-  // Fl->begin();
-  // Br->begin();
-  // Bl->begin();
+    
+    gyro = new Gyroscope(SDA_PIN, SCL_PIN);
+    
+    if (!gyro->begin()) {
+        Serial.println("Gyroscope");
+        while(1); 
+    }
 
-  Fr->resetHeading();
-  targetHeading = 0.0;
-  
+    //                Kp    Ki    Kd    chA  chB  ppr  rpwm  lpwm
+    Fr = new Movement(0.1f, 0.01f, 0.1f, 34, 35, PPR, 12, 13);
+    Fl = new Movement(0.1f, 0.01f, 0.1f, 36, 39, PPR, 14, 27);
+    Br = new Movement(0.1f, 0.01f, 0.1f, 16, 17, PPR, 19, 18);
+    Bl = new Movement(0.1f, 0.01f, 0.1f, 32, 33, PPR, 26, 25);
+
+    Fr->begin(); Fl->begin(); Br->begin(); Bl->begin();
+
+    gyro->resetHeading(); 
+    targetHeading = 0.0f;
+
+    Serial.println(F("semua siap!!!"));
 }
 
 void loop() {
-  Fr -> gyroUpdate()
-
-  if (Fr->isTilted(20.0)) {
-    // Robot miring >20°, matikan semua motor
-    Fr->update(0);
-    Fl->update(0);
-    Br->update(0);
-    Bl->update(0);
     
-    Serial.println("Motor dimatikan");
-    delay(100);
-    return;
-  }
+    gyro->update();
 
-  if(PS4.isConnected()){
-    control();
-  }
+    // matikan semua motor jika robot miring >20° 
+    if (gyro->isTilted(20.0f)) {
+        Fr->update(0); Fl->update(0); Br->update(0); Bl->update(0);
+        Fr->resetPID(); Fl->resetPID(); Br->resetPID(); Bl->resetPID();
+        return;
+    }
 
-  static unsigned long lastDebug = 0;
-  if (millis() - lastDebug > 100) { //100 ms
-    lastDebug = millis();
-    Serial.print("Pitch: "); Serial.print(Fr->getPitch(), 1);
-    Serial.print("° | Roll: "); Serial.print(Fr->getRoll(), 1);
-    Serial.print("° | Heading: "); Serial.print(Fr->getHeading(), 1);
-    Serial.print("° | Target: "); Serial.print(targetHeading, 1);
-    Serial.println("°");
-  }
-  
+    if (PS4.isConnected()) control();
+
+    static unsigned long lastDebug = 0;
+    if (millis() - lastDebug > 100) {
+        lastDebug = millis();
+        Serial.print(F("Pitch: "));   Serial.print(gyro->getPitch(), 1);
+        Serial.print(F("° | Roll: ")); Serial.print(gyro->getRoll(), 1);
+        Serial.print(F("° | Yaw: "));  Serial.print(gyro->getHeading(), 1);
+        Serial.print(F("° | Target: ")); Serial.print(targetHeading, 1);
+        Serial.println(F("°"));
+    }
 }
 
-void move(int forward, int strafe, int turn){
+void move(int forward, int strafe, int turn) {
+    const int DEADZONE = 8; 
 
-  int threshold = 8; // Deadzone, nilai def gamepad kadang error
+    if (abs(turn) > DEADZONE) {
+        headingLockActive = false;
 
-  if (abs(turnInput) > threshold) {
-    headingLockActive = false; // Matikan lock sementara
+        float headingChange = (turn / 127.0f) * 2.0f; 
+        targetHeading += headingChange;
+
+        if (targetHeading >  180.0f) targetHeading -= 360.0f;
+        if (targetHeading < -180.0f) targetHeading += 360.0f;
+
+        gyro->setTargetHeading(targetHeading);
+    } else headingLockActive = true;
     
-    float headingChange = (turnInput / 127.0) * 2.0; // Adjust sensitivity 
-    targetHeading += headingChange;
+    float headingCorr = 0.0f;
+    if (headingLockActive) headingCorr = gyro->getHeadingCorrection(40.0f); 
+
+    float tiltCorr = gyro->getTiltCorrection(0.0f, 0.0f, 30.0f); 
+
+    // jika nilai joystick < DEADZONE maka semua roda berhenti
+    if (abs(forward) < DEADZONE && abs(strafe) < DEADZONE && abs(turn) < DEADZONE) {
+        Fr->resetPID(); Fl->resetPID(); Br->resetPID(); Bl->resetPID();
+        Fr->update(0); Fl->update(0); Br->update(0); Bl->update(0);
+        return;
+    }
     
-    if (targetHeading > 180.0)  targetHeading -= 360.0;
-    if (targetHeading < -180.0) targetHeading += 360.0;
-    
-    Fr->setTargetHeading(targetHeading);
-  } else {
-    headingLockActive = true;
-  }
+    float vfl = forward + strafe + headingCorr + tiltCorr;
+    float vfr = forward - strafe - headingCorr + tiltCorr;
+    float vbl = forward - strafe + headingCorr + tiltCorr;
+    float vbr = forward + strafe - headingCorr + tiltCorr;
 
-  float headingCorr = 0;
-  float tiltCorr = 0;
+    // Normalisasi 
+    float maxVal = max({fabsf(vfl), fabsf(vfr), fabsf(vbl), fabsf(vbr)});
+    float scale  = (maxVal > 127.0f) ? (100.0f / maxVal) : (100.0f / 127.0f);
 
-  if (headingLockActive){
-    headingCorr = Fr -> getHeadingCorrection(40.0) // Limit correction 40 pwm
-  }
-  
-  tiltCorr = Fr->getTiltCorrection(0.0, 0.0, 30.0); // Limit 30 PWM
-
-  if (abs(forward) < threshold && abs(strafe) < threshold && abs(turn) < threshold) {
-    Fr->resetPID(); 
-    // Fl->resetPID();
-    // Br->resetPID();
-    // Bl->resetPID();
-
-    forward = 0;
-    strafe = 0;
-    // turn = 0;
-  }
-  // int vfl = forward + strafe + turn; 
-  // int vfr = forward - strafe - turn; 
-  // int vbl = forward - strafe + turn;
-  // int vbr = forward + strafe - turn;
-
-  // Turn -> headingCorr dari gyro
-  float vfl = forward + strafe + headingCorr + tiltCorr;
-  float vfr = forward - strafe - headingCorr + tiltCorr;
-  float vbl = forward - strafe + headingCorr + tiltCorr;
-  float vbr = forward + strafe - headingCorr + tiltCorr;
-  
-  float max_val = std::max({abs(vfl), abs(vfr), abs(vbl), abs(vbr)});
-
-  if (max_val > 255) {
-    vfl = (vfl / max_val) * 255;
-    vfr = (vfr / max_val) * 255;
-    vbl = (vbl / max_val) * 255;
-    vbr = (vbr / max_val) * 255;
-  }
-  // float Vfr = map(vfr, -255, 255, -100, 100);  
-  // float Vfl = map(vfl, -255, 255, -100, 100); 
-  // float Vbr = map(vbr, -255, 255, -100, 100);  
-  // float Vbl = map(vbl, -255, 255, -100, 100);  
-
-  Fr->update(vfr);
-  // Fl->update(vfl);
-  // Br->update(vbr);
-  // Bl->update(vbl);                                    
+    vfl *= scale; vfr *= scale; vbl *= scale; vbr *= scale;
+    Fr->update(vfr); Fl->update(vfl); Br->update(vbr); Bl->update(vbl);
 }
 
-void control(){
-  
-  if(PS4.Triangle()){
-    Serial.println("segitiga di tekan");
-  }
-  if(PS4.LStickY() || PS4.LStickX() || PS4.RStickX() ){
-    move(PS4.LStickY(), PS4.LStickX(),PS4.RStickX());
-  }
-  if(PS4.Square()){
-    Serial.println("kotak di tekan");
-  }
-  if(PS4.Circle()){
-    Serial.println("lingkaran di tekan");   
-    delay(200);
-  }
-  
+
+void control() {
+    if (PS4.Triangle()) {
+        Serial.println(F("Segitiga ditekan"));
+    }
+
+    if (PS4.Square()) {
+        Serial.println(F("Kotak ditekan"));
+    }
+
+    if (PS4.Circle()) {
+        Serial.println(F("Lingkaran ditekan"));
+        
+    }
+
+    move(PS4.LStickY(), PS4.LStickX(), PS4.RStickX());
 }
