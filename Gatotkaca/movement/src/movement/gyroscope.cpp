@@ -6,9 +6,17 @@ Gyroscope::Gyroscope(int sdaPin, int sclPin)
     : _sdaPin(sdaPin), _sclPin(sclPin) {}
 
 // ─────────────────────────────────────────────────────────────────────────────
+Gyroscope::~Gyroscope() {
+    delete _pidPitch;
+    delete _pidRoll;
+    delete _pidYaw;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 bool Gyroscope::begin() {
     Wire.begin(_sdaPin, _sclPin);
     Wire.setClock(400000);
+    
 
     // Cek WHO_AM_I
     uint8_t who;
@@ -22,15 +30,20 @@ bool Gyroscope::begin() {
         return false;
     }
 
-    // Wake up, gunakan gyro X sebagai clock source
     if (!_mpuWrite(MPU_REG_PWR_MGMT_1, 0x01)) return false;
-    delay(100); 
+    delay(100);
 
     _mpuWrite(MPU_REG_SMPLRT_DIV, 0x07); // Sample rate 125 Hz
-    _mpuWrite(MPU_REG_CONFIG,     0x03); // DLPF ~44 Hz (kurangi noise)
+    _mpuWrite(MPU_REG_CONFIG,     0x03); // DLPF ~44 Hz
     _mpuWrite(MPU_REG_GYRO_CFG,   0x00); // ±250°/s
     _mpuWrite(MPU_REG_ACCEL_CFG,  0x00); // ±2g
     delay(50);
+
+    
+    //                          Kp     Ki     Kd    outMin              outMax
+    _pidPitch = new MyPID(3.0f, 0.02f, 1.2f, -TILT_CORR_LIMIT,    TILT_CORR_LIMIT);
+    _pidRoll  = new MyPID(3.0f, 0.02f, 1.2f, -TILT_CORR_LIMIT,    TILT_CORR_LIMIT);
+    _pidYaw   = new MyPID(2.5f, 0.05f, 0.8f, -HEADING_CORR_LIMIT, HEADING_CORR_LIMIT);
 
     // ── Kalibrasi offset ─────────────────────────────────────────────────────
     Serial.println(F("[Gyroscope] Kalibrasi... jangan gerakkan robot!"));
@@ -48,12 +61,12 @@ bool Gyroscope::begin() {
         delay(2);
     }
 
-    _offAx =  (float)sAx / CALIB_SAMPLES / ACCEL_SCALE;
-    _offAy =  (float)sAy / CALIB_SAMPLES / ACCEL_SCALE;
-    _offAz =  (float)sAz / CALIB_SAMPLES / ACCEL_SCALE - 1.0f; // kurangi 1g
-    _offGx =  (float)sGx / CALIB_SAMPLES / GYRO_SCALE;
-    _offGy =  (float)sGy / CALIB_SAMPLES / GYRO_SCALE;
-    _offGz =  (float)sGz / CALIB_SAMPLES / GYRO_SCALE;
+    _offAx = (float)sAx / CALIB_SAMPLES / ACCEL_SCALE;
+    _offAy = (float)sAy / CALIB_SAMPLES / ACCEL_SCALE;
+    _offAz = (float)sAz / CALIB_SAMPLES / ACCEL_SCALE - 1.0f;
+    _offGx = (float)sGx / CALIB_SAMPLES / GYRO_SCALE;
+    _offGy = (float)sGy / CALIB_SAMPLES / GYRO_SCALE;
+    _offGz = (float)sGz / CALIB_SAMPLES / GYRO_SCALE;
 
     Serial.println(F("[Gyroscope] Kalibrasi selesai, siap dipakai!"));
 
@@ -76,7 +89,6 @@ bool Gyroscope::update() {
 
     if (dt <= 0 || dt > 0.5f) dt = 0.01f;
 
-    // Sudut dari akselerometer
     float accelPitch = atan2f(ay, sqrtf(ax*ax + az*az)) * RAD_TO_DEG;
     float accelRoll  = atan2f(-ax, az)                  * RAD_TO_DEG;
 
@@ -90,11 +102,9 @@ bool Gyroscope::update() {
         return true;
     }
 
-    // Kalman filter untuk pitch dan roll
     _pitch = _kalmanUpdate(_kPitch, accelPitch, gy, dt);
     _roll  = _kalmanUpdate(_kRoll,  accelRoll,  gx, dt);
 
-    // Yaw = integrasi gyro (akselerometer tidak bisa ukur yaw)
     _yaw += gz * dt;
     if (_yaw >  180.0f) _yaw -= 360.0f;
     if (_yaw < -180.0f) _yaw += 360.0f;
@@ -106,12 +116,7 @@ bool Gyroscope::update() {
 void Gyroscope::resetHeading() {
     _yaw           = 0.0f;
     _targetHeading = 0.0f;
-    // Reset state PID yaw agar tidak ada lonjakan koreksi
-    _yawInteg    = 0;
-    _yawPrevErr  = 0;
-    _yawPrevComp = 0;
-    _yawLastFD   = 0;
-    _yawLastT    = 0;
+    if (_pidYaw) _pidYaw->reset();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -121,68 +126,26 @@ bool Gyroscope::isTilted(float threshold) const {
 
 // ─────────────────────────────────────────────────────────────────────────────
 float Gyroscope::getTiltCorrection(float targetPitch, float targetRoll, float corrLimit) {
-    float pc = _pidCalc(targetPitch, _pitch,
-                        3.0f, 0.02f, 1.2f, corrLimit,
-                        _pitchInteg, _pitchPrevErr, _pitchPrevComp, _pitchLastFD, _pitchLastT);
-
-    float rc = _pidCalc(targetRoll, _roll,
-                        3.0f, 0.02f, 1.2f, corrLimit,
-                        _rollInteg, _rollPrevErr, _rollPrevComp, _rollLastFD, _rollLastT);
-
+    float pc = _pidPitch->calculate(targetPitch, _pitch);
+    float rc = _pidRoll->calculate(targetRoll,   _roll);
     return constrain(pc + rc, -corrLimit, corrLimit);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 float Gyroscope::getHeadingCorrection(float corrLimit) {
-    // Hitung error heading dengan wrap-around ±180°
+    // Wrap-around error ±180° tetap ditangani manual sebelum masuk PID
     float err = _targetHeading - _yaw;
     if (err >  180.0f) err -= 360.0f;
     if (err < -180.0f) err += 360.0f;
 
-    return _pidCalc(0.0f, -err,
-                    2.5f, 0.05f, 0.8f, corrLimit,
-                    _yawInteg, _yawPrevErr, _yawPrevComp, _yawLastFD, _yawLastT);
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-//  Internal PID helper (dipakai untuk tilt & heading correction)
-// ─────────────────────────────────────────────────────────────────────────────
-float Gyroscope::_pidCalc(float target, float current,
-                           float p, float i, float d, float limit,
-                           float& integ, float& prevErr, float& prevComp,
-                           float& lastFD, unsigned long& lastT) {
-    unsigned long now = micros();
-    if (lastT == 0) {
-        lastT    = now;
-        prevErr  = target - current;
-        prevComp = current;
-        lastFD   = 0;
-        return 0;
-    }
-
-    float dt = (now - lastT) / 1000.0f; // ms → lebih stabil untuk integral kecil
-    if (dt <= 0) return 0;
-    lastT = now;
-
-    float error = target - current;
-    integ += error * dt;
-    integ  = constrain(integ, -_integralLimit, _integralLimit);
-
-    float raw      = -(current - prevComp) / dt;
-    float filtered = (_alpha * raw) + ((1.0f - _alpha) * lastFD);
-
-    prevErr  = error;
-    prevComp = current;
-    lastFD   = filtered;
-
-    float out = (error * p) + (integ * i) + (filtered * d);
-    return constrain(out, -limit, limit);
+    // target=err, current=0 → PID error = err (sama seperti sebelumnya)
+    float out = _pidYaw->calculate(err, 0.0f);
+    return constrain(out, -corrLimit, corrLimit);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 float Gyroscope::_kalmanUpdate(KalmanState& s, float measAngle,
                                 float gyroRate, float dt) {
-    // Predict
     float rate  = gyroRate - s.bias;
     s.angle    += dt * rate;
     s.P[0][0]  += dt * (dt*s.P[1][1] - s.P[0][1] - s.P[1][0] + s.Q_angle);
@@ -190,7 +153,6 @@ float Gyroscope::_kalmanUpdate(KalmanState& s, float measAngle,
     s.P[1][0]  -= dt * s.P[1][1];
     s.P[1][1]  += s.Q_bias * dt;
 
-    // Update
     float S  = s.P[0][0] + s.R_measure;
     float K0 = s.P[0][0] / S;
     float K1 = s.P[1][0] / S;

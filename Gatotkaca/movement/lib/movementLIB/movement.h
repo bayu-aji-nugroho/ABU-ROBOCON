@@ -13,6 +13,7 @@ class Movement{
         MyPID* pid;
         int RPWM,LPWM;
         String name;
+        unsigned long lastDebug = 0;
         
         float nilai_PWM_ke_roda;
        

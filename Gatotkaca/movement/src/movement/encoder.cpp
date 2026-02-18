@@ -13,21 +13,25 @@ void Encoder::begin() {
 }
 
 void Encoder::update() {
+    if (lastUpdateMicros == 0) {  
+        lastUpdateMicros = micros();
+        return;
+    }
     unsigned long now = micros();
     float deltaTime = (now - lastUpdateMicros) / 1000000.0; // Konversi ke detik
-    static unsigned long lastDebug = 0;
+    
     if (millis() - lastDebug > 100) {
         lastDebug = millis();
-        Serial.printf(">%scount:%.1f",this->name,encoder.getCount());
+        Serial.printf(">%scount:%.1f\n",this->name.c_str(),encoder.getCount());
     }
 
     if (deltaTime > 0.01) { // Hitung setiap 10ms
         long currentCount = (long) encoder.getCount();
         long deltaTicks = currentCount - lastCount;
 
-        float instantRPM = (deltaTicks / ppr) / (deltaTime / 60.0);
+        float instantRPM = (float)(deltaTicks * 60.0f) / (ppr * deltaTime);
         
-        const float alpha = 0.5; 
+        const float alpha = 0.5; // jika lemot naikkan, jika noise turunkan
         RPMsekarang = (alpha * instantRPM) + ((1.0 - alpha) * RPMsekarang);
         
         lastCount = currentCount;

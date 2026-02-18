@@ -12,6 +12,7 @@ class Encoder{
         unsigned long lastUpdateMicros = 0;
         float RPMsekarang = 0;
         String name;
+        unsigned long lastDebug = 0;
 
     public:
         Encoder(int a, int b, float pulses,String name);
