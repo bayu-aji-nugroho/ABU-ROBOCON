@@ -13,12 +13,14 @@ class Encoder{
         float RPMsekarang = 0;
         String name;
         unsigned long lastDebug = 0;
+        float _count = 0.0f;
 
     public:
         Encoder(int a, int b, float pulses,String name);
         void begin();
         void update(); 
         float getRPM() const; // mengoutputkan rpm
+        float getCount() const {return _count; }
 };
 
 #endif

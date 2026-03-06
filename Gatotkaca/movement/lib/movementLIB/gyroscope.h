@@ -61,6 +61,7 @@ public:
 
 private:
     int _sdaPin, _sclPin;
+    bool isInitialized = false;
 
     float _pitch = 0.0f;
     float _roll  = 0.0f;

@@ -4,7 +4,6 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include <PID_v1.h>
-#include <PID_AutoTune_v0.h>
 
 
 class MyPID {
@@ -22,7 +21,7 @@ public:
 
 private:
     PID* pid;
-    PID_ATune* aTune;
+   
 
     float kp, ki, kd;
     float outMin, outMax;

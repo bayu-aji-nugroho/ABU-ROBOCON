@@ -7,6 +7,13 @@
 class Encoder;
 class MyPID;
 
+
+struct LogStruct {
+    String& name;
+    float Target;
+    float Actual;
+};
+
 class Movement{
     private:
         Encoder* encoder;
@@ -16,6 +23,9 @@ class Movement{
         unsigned long lastDebug = 0;
         
         float nilai_PWM_ke_roda;
+        float _targetRPM = 0.0f;
+        float _actualRPM = 0.0f;
+        float _count     = 0.0f;
        
 
     public:
@@ -23,10 +33,17 @@ class Movement{
             String name,
             float Kp, float Ki, float Kd, int chanelA, int ChanelB,
               float ppr,int RPWM, int LPWM);
-         ~Movement() { delete encoder; delete pid;}
+         ~Movement();
         void update(float target);
         void begin();
         void resetPID();
+        float getActualRPM() const { return _actualRPM; }
+        float getTargetRPM() const { return _targetRPM; }
+        float getTargetCount() const {return _count;}
+        float getPWM() const { return nilai_PWM_ke_roda; }
+        const String& getName()   const { return name; } 
+        
+        
 
        
 };

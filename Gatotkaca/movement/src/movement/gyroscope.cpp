@@ -3,33 +3,45 @@
 
 // ─────────────────────────────────────────────────────────────────────────────
 Gyroscope::Gyroscope(int sdaPin, int sclPin)
-    : _sdaPin(sdaPin), _sclPin(sclPin) {}
+    : _sdaPin(sdaPin), _sclPin(sclPin), _pidPitch(nullptr), _pidRoll(nullptr), _pidYaw(nullptr) {
+    isInitialized = false;
+    _connected = false;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 Gyroscope::~Gyroscope() {
-    delete _pidPitch;
-    delete _pidRoll;
-    delete _pidYaw;
+    if (_pidPitch) delete _pidPitch;
+    if (_pidRoll)  delete _pidRoll;
+    if (_pidYaw)   delete _pidYaw;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 bool Gyroscope::begin() {
-    Wire.begin(_sdaPin, _sclPin);
+    // PENTING: Inisialisasi objek PID di awal agar pointer tidak NULL 
+    // meskipun sensor gagal dideteksi. Ini mencegah "StoreProhibited" crash.
+    if (!_pidPitch) _pidPitch = new MyPID(3.0f, 0.02f, 1.2f, -TILT_CORR_LIMIT,    TILT_CORR_LIMIT);
+    if (!_pidRoll)  _pidRoll  = new MyPID(3.0f, 0.02f, 1.2f, -TILT_CORR_LIMIT,    TILT_CORR_LIMIT);
+    if (!_pidYaw)   _pidYaw   = new MyPID(2.5f, 0.05f, 0.8f, -HEADING_CORR_LIMIT, HEADING_CORR_LIMIT);
+
+    Wire.begin((int)_sdaPin, (int)_sclPin);
     Wire.setClock(400000);
-    
 
     // Cek WHO_AM_I
     uint8_t who;
     if (!_mpuRead(MPU_REG_WHO_AM_I, &who, 1)) {
-        Serial.println(F("[Gyroscope] ERROR: Tidak bisa baca register WHO_AM_I"));
+        Serial.println(F("[Gyroscope] ERROR: Tidak bisa baca register WHO_AM_I (Cek Kabel!)"));
+        isInitialized = false;
         return false;
     }
+    
     if (who != 0x68 && who != 0x72) {
         Serial.print(F("[Gyroscope] ERROR: WHO_AM_I tidak cocok = 0x"));
         Serial.println(who, HEX);
+        isInitialized = false;
         return false;
     }
 
+    // Konfigurasi MPU6050
     if (!_mpuWrite(MPU_REG_PWR_MGMT_1, 0x01)) return false;
     delay(100);
 
@@ -39,19 +51,16 @@ bool Gyroscope::begin() {
     _mpuWrite(MPU_REG_ACCEL_CFG,  0x00); // ±2g
     delay(50);
 
-    
-    //                          Kp     Ki     Kd    outMin              outMax
-    _pidPitch = new MyPID(3.0f, 0.02f, 1.2f, -TILT_CORR_LIMIT,    TILT_CORR_LIMIT);
-    _pidRoll  = new MyPID(3.0f, 0.02f, 1.2f, -TILT_CORR_LIMIT,    TILT_CORR_LIMIT);
-    _pidYaw   = new MyPID(2.5f, 0.05f, 0.8f, -HEADING_CORR_LIMIT, HEADING_CORR_LIMIT);
-
     // ── Kalibrasi offset ─────────────────────────────────────────────────────
     Serial.println(F("[Gyroscope] Kalibrasi... jangan gerakkan robot!"));
     long sAx=0, sAy=0, sAz=0, sGx=0, sGy=0, sGz=0;
     float ax, ay, az, gx, gy, gz;
 
     for (int i = 0; i < CALIB_SAMPLES; i++) {
-        _readImu(ax, ay, az, gx, gy, gz);
+        if (!_readImu(ax, ay, az, gx, gy, gz)) {
+             Serial.println(F("[Gyroscope] ERROR: Gagal baca data saat kalibrasi"));
+             return false;
+        }
         sAx += (long)(ax * ACCEL_SCALE);
         sAy += (long)(ay * ACCEL_SCALE);
         sAz += (long)(az * ACCEL_SCALE);
@@ -70,6 +79,7 @@ bool Gyroscope::begin() {
 
     Serial.println(F("[Gyroscope] Kalibrasi selesai, siap dipakai!"));
 
+    isInitialized = true;
     _connected   = true;
     _firstUpdate = true;
     _lastMicros  = micros();
@@ -78,7 +88,7 @@ bool Gyroscope::begin() {
 
 // ─────────────────────────────────────────────────────────────────────────────
 bool Gyroscope::update() {
-    if (!_connected) return false;
+    if (!isInitialized || !_connected) return false;
 
     float ax, ay, az, gx, gy, gz;
     if (!_readImu(ax, ay, az, gx, gy, gz)) return false;
@@ -121,11 +131,15 @@ void Gyroscope::resetHeading() {
 
 // ─────────────────────────────────────────────────────────────────────────────
 bool Gyroscope::isTilted(float threshold) const {
+    if (!isInitialized) return false;
     return (fabsf(_pitch) > threshold || fabsf(_roll) > threshold);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 float Gyroscope::getTiltCorrection(float targetPitch, float targetRoll, float corrLimit) {
+    if (!isInitialized || !_pidPitch || !_pidRoll) { 
+        return 0; 
+    }
     float pc = _pidPitch->calculate(targetPitch, _pitch);
     float rc = _pidRoll->calculate(targetRoll,   _roll);
     return constrain(pc + rc, -corrLimit, corrLimit);
@@ -133,12 +147,15 @@ float Gyroscope::getTiltCorrection(float targetPitch, float targetRoll, float co
 
 // ─────────────────────────────────────────────────────────────────────────────
 float Gyroscope::getHeadingCorrection(float corrLimit) {
-    // Wrap-around error ±180° tetap ditangani manual sebelum masuk PID
+    // Proteksi Null Pointer
+    if (!isInitialized || !_pidYaw) {
+        return 0;
+    }
+
     float err = _targetHeading - _yaw;
     if (err >  180.0f) err -= 360.0f;
     if (err < -180.0f) err += 360.0f;
 
-    // target=err, current=0 → PID error = err (sama seperti sebelumnya)
     float out = _pidYaw->calculate(err, 0.0f);
     return constrain(out, -corrLimit, corrLimit);
 }
