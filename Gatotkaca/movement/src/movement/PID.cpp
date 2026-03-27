@@ -17,41 +17,28 @@ MyPID::MyPID(float kp, float ki, float kd, float outMin, float outMax)
     }
 
     pid->SetOutputLimits((double)outMin, (double)outMax);
-    pid->SetSampleTime(10);
+    pid->SetSampleTime(10); 
     pid->SetMode(AUTOMATIC);
-
-    
 
 }
 
     
-
-
 MyPID::~MyPID() {
-    delete pid;
-    
+    delete pid;  
 }
 
 
 float MyPID::calculate(float target, float current) {
     
-
     setpoint = (double)target;
     input    = (double)current;
 
-          
     pid->Compute();
-
-
     return (float)output;
 }
 
 
 void MyPID::reset() {
-    if (tuning) {
-        tuning = false;
-        
-    }
     output = setpoint = input = 0.0;
     if (!pid) return;
     pid->SetMode(MANUAL);
