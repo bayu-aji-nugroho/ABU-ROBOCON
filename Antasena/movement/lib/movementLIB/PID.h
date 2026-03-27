@@ -1,21 +1,33 @@
 #ifndef PID_H
 #define PID_H
 
-class PID {
+#include <Arduino.h>
+#include <PID_v1.h>
+
+
+class MyPID {
 public:
-    PID(float p, float i, float d, float minVal, float maxVal);
+    
+    MyPID(float p, float i, float d, float outMin, float outMax);
+
+    
+    ~MyPID();
+
     float calculate(float target, float current);
     void reset();
+    void setTunings(float kp, float ki, float kd);
 
 private:
+    PID* pid;
+   
+
     float kp, ki, kd;
     float outMin, outMax;
-    float integral, prevError;
-    float integralLimit;
-    unsigned long lastTime;
-    float prevComponent;           // Menyimpan nilai 'current' sebelumnya
-    float lastFilteredDerivative;  // Menyimpan hasil filter derivatif terakhir
-    float alpha;                   // Koefisien filter (0.0 - 1.0)
+    bool tuning;
+
+    double input;
+    double output;
+    double setpoint;
 };
 
 #endif

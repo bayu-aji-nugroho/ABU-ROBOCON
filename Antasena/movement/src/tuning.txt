@@ -1,36 +1,94 @@
-- cara tuning Kp, Ki, dan Kd
-yang perlu diperhatikan:
-1. ini untuk setiap roda
-2. robot harus sudah diberi beban
-3. nilai bisa di samain untuk semua roda tapi sangat tidak direkomendasikan
-4. pastikan Battery Voltage dalam kondisi penuh (Full).
-5. nilai setpoint/nilai hasil perhitungan gamepad harus di buat konstan[jgn pake gamepad] agar gampang dihitung
 
-- Awal
-1. robot diangkat agar tidak berpindah tempat ketika tuning
-2. 0 kan semua parameter
-3. harus print nilai asli motor dan nilai aktual[yang diinginkan]
 
-- Mencari Kp 
-1. Mulai Kp dari nilai sangat kecil (misal 0.05).
-2. Naikkan nilai Kp secara perlahan (misal: 0.05, 0.1, 0.2, ...).
-3. Naikkan Kp sampai roda berputar dan kecepatannya mulai naik-turun[osilasi] secara stabil di sekitar target.
-4. Catat nilai ini sebagai Ku (Ultimate Gain).
+URUTAN WAJIB SEBELUM LOMBA:
+  1. Kalibrasi MPU9250 (sekali saja)
+  2. Tuning PID roda (per roda, dengan beban)
+  3. Tuning Heading PID
+  4. Uji Field Oriented Control
+  5. Stress test 30 menit
 
-- Mencari Kd
-1. Masukkan nilai Kd secara perlahan (misal mulai dari 0.01). [Kp harus sudah terisi dengan nilai dari percobaan sebelumnya]
-2. Tambahkan sampai osilasi hilang dan gerakan roda menjadi tenang saat mencapai target.
-3. Jika motor terdengar berderit atau bergetar dengan frekuensi sangat tinggi (suara kasar), kecilkan nilai.
+--------------------------------------------------------
+1. KALIBRASI MPU9250 (LAKUKAN SEKALI SAJA)
+--------------------------------------------------------
+  a. Uncomment baris `calibrate()` di gyroscope.cpp → init()
+  b. Upload ke ESP32
+  c. Letakkan robot diam di permukaan rata saat kalibrasi accel/gyro
+  d. Putar robot membentuk angka 8 pelan-pelan selama 15 detik saat kalibrasi mag
+  e. Catat nilai Mag Bias & Mag Scale dari Serial Monitor
+  f. Masukkan nilai tersebut ke gyroscope.cpp:
+       imu.setMagBias(X, Y, Z);
+       imu.setMagScale(X, Y, Z);
+  g. Comment lagi baris calibrate(), upload ulang
 
-- Mencari Ki [[Kp dan Kd harus sudah terisi dengan nilai dari percobaan sebelumnya]]
-note:
-robot sudah bergerak lancar tetapi kecepatannya selalu sedikit di bawah target
- (misal target 100 RPM, tapi hanya stabil di 96 RPM),
-1. Masukkan nilai Ki yang sangat kecil (misal 0.001 atau 0.005).
-2. Kecepatan Actual harus merayap naik hingga tepat menempel pada kecepatan Target.
+  PENTING: Lakukan kalibrasi di ruangan lomba atau ruangan serupa.
+  Besi/benda logam besar di sekitar robot mempengaruhi kalibrasi.
 
-Uji "Load Resistance" (Beban) Ki test
-1. Jalankan roda pada kecepatan tertentu.
-2. Coba berikan sedikit beban/tahanan pada roda menggunakan tangan
-3. Saat  diberi beban, RPM akan turun sebentar, 
-    namun perlahan-lahan RPM akan naik kembali ke target semula meskipun Anda masih menahan roda tersebut. 
+--------------------------------------------------------
+2. TUNING PID MOTOR (PER RODA)
+--------------------------------------------------------
+
+  PERSIAPAN:
+  - Angkat robot (roda tidak menyentuh lantai)
+  - Pasang beban yang representatif (baterai, controller, dll sudah terpasang)
+  - Baterai dalam kondisi PENUH
+  - Set setpoint konstan di main.cpp (misal hardcode 200 RPM) bukan dari gamepad
+  - Buka Serial Plotter, lihat kolom actual vs target tiap roda
+
+  LANGKAH Kp:
+  1. Set Ki=0, Kd=0
+  2. Mulai Kp=0.5, naikkan bertahap (0.5, 1, 2, 4, 6, 8 ...)
+  3. Stop saat RPM mulai osilasi stabil di sekitar target
+  4. Catat nilai ini sebagai Ku
+  5. Set Kp = 0.6 × Ku (aman, tidak osilasi)
+
+  LANGKAH Kd:
+  1. Gunakan Kp dari langkah sebelumnya
+  2. Mulai Kd=0.01, naikkan bertahap
+  3. Stop saat osilasi hilang & respons mulus
+  4. JIKA motor berderit/getar frekuensi tinggi → Kd terlalu besar, kecilkan
+
+  LANGKAH Ki:
+  1. Gunakan Kp dan Kd dari langkah sebelumnya
+  2. Mulai Ki=0.001
+  3. Target: garis actual perlahan naik sampai menempel ke target
+  4. UJI BEBAN: tahan roda dengan tangan → RPM turun → tunggu → RPM harus naik
+     kembali ke target meski tangan masih menahan
+
+  NILAI AWAL YANG DIREKOMENDASIKAN (adjust dari sini):
+    Kp = 6–10   Ki = 0.005–0.02   Kd = 0.05–0.2
+
+--------------------------------------------------------
+3. TUNING HEADING PID (Config::HEADING_KP/KI/KD)
+--------------------------------------------------------
+  - Ini PID untuk menjaga robot tetap lurus (koreksi heading)
+  - Set di Config namespace di main.cpp
+
+  CARA UJI:
+  1. Dorong robot lurus ke depan via joystick
+  2. Beri gangguan rotasi ringan (sentuh badan robot)
+  3. Robot harus kembali ke heading semula dengan mulus, tidak oscillate
+
+  NILAI AWAL: Kp=2.0  Ki=0.0  Kd=0.1
+  - Jika robot "menggigil" saat jalan lurus → Kp terlalu besar
+  - Jika robot tidak mau balik ke heading semula → Kp terlalu kecil
+  - Jika ada steady-state offset heading → tambah Ki kecil (0.001)
+
+--------------------------------------------------------
+4. UJI FIELD ORIENTED CONTROL
+--------------------------------------------------------
+  - Aktifkan Config::FIELD_ORIENTED = true
+  - Putar robot 90° secara manual (pegang badan)
+  - Dorong joystick "maju" (LStickY)
+  - Robot HARUS tetap maju ke arah lapangan, bukan ke samping
+  - Jika terbalik arah, cek tanda (+/-) di FOC math di main.cpp
+
+--------------------------------------------------------
+5. STRESS TEST SEBELUM LOMBA
+--------------------------------------------------------
+  - Jalankan robot nonstop 30 menit di lapangan sesungguhnya
+  - Monitor suhu driver BTS7960 (tidak boleh lebih dari 70°C)
+  - Monitor tegangan baterai (bila turun >0.5V dari awal, PID perlu re-tune)
+  - Cek apakah heading drift signifikan setelah 10 menit
+  - Test semua arah: maju, mundur, strafe, diagonal, rotate, kombinasi
+
+  CATATAN: Tuning di baterai penuh. Saat lomba, jaga baterai selalu charged.
