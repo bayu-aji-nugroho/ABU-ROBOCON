@@ -6,22 +6,22 @@ Antasena dan Gatotkaca adalah nama dua robot yang akan digunakan untuk mewakili 
 ## 🚀 Fitur
 
 * **Movement** 
-- FreeRTOS
-- x-drive dan mecanum purpose
-- Implementasi PID
-- Implementasi OOP
-- Sistem kendali loop tertutup
-    - Encoder 2 fase
-    - IMU MPU6050
-- Menggunakan 8 dan bit PWM
-- Log untuk Serial Studio
+    - FreeRTOS
+    - x-drive dan mecanum purpose
+    - Implementasi PID
+    - Implementasi OOP
+    - Sistem kendali loop tertutup
+        - Encoder 2 fase
+        - IMU MPU6050
+    - Menggunakan 8 dan bit PWM
+    - Log untuk Serial Studio
 
 
 
 * **Tools:** 
-- 
+    - 
 * **image processing:** 
-- 
+    - 
 
 ## 🛠 Spesifikasi Hardware
 
@@ -51,7 +51,4 @@ Antasena dan Gatotkaca adalah nama dua robot yang akan digunakan untuk mewakili 
 
 ## 🤝 Contributing
 
-1.  Fork the repo.
-2.  Create a feature branch.
-3.  Submit a Pull Request with a detailed description of changes.
 
