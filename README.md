@@ -7,14 +7,16 @@ Antasena dan Gatotkaca adalah nama dua robot yang akan digunakan untuk mewakili 
 
 * **Movement** 
     - FreeRTOS
+    - Hybrid [Arduino (ESP32 core)+ ESP-IDF]
     - x-drive dan mecanum purpose
     - Implementasi PID
     - Implementasi OOP
     - Sistem kendali loop tertutup
         - Encoder 2 fase
         - IMU MPU6050
-    - Menggunakan 8 dan bit PWM
+    - Menggunakan 8 dan 12 bit PWM
     - Log untuk Serial Studio
+    
 
 
 
