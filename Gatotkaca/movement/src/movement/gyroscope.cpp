@@ -1,4 +1,4 @@
-#include "gyroscope.h"
+#include "gyroscope.h"  
 #include <Arduino.h>
 
 Mpu::Mpu(int sda, int scl, float Kp, float Ki, float Kd)
@@ -47,17 +47,13 @@ void Mpu::init() {
 
 void Mpu::update() {
     if (!dmpReady) return;
-
     fifoCount = mpu.getFIFOCount();
-
-
     if (fifoCount >= 1024) {
         mpu.resetFIFO();
-        
         return;
     }
 
-    if (fifoCount < packetSize) return; // data belum siap
+    if (fifoCount < packetSize) return; 
 
     mpu.getFIFOBytes(fifoBuffer, packetSize);
 

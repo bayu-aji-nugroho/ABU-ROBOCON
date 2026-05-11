@@ -6,6 +6,7 @@
 #include <freertos/semphr.h>
 #include "../lib/movementLIB/gyroscope.h"
 #include "../lib/movementLIB/movement.h"
+
 namespace Config {
     constexpr bool    UART_MODE        = false;             // false: gamepad -> esp32
     constexpr bool    LOG              = true;              // print telemetri ke USB Serial
@@ -21,7 +22,7 @@ namespace Config {
     constexpr float   HEADING_KD       = 0.1f;              // Kd imu
     constexpr const char* PS4_MAC      = "40:1A:58:62:D6:A2"; // mac address gamepad
     constexpr int     UART2_BAUD       = 115200;            // Uart2 baud
-    constexpr int     UART2_RX         = 16;                //pin UART RX
+    constexpr int     UART2_RX         = 16;                // pin UART RX
     constexpr int     UART2_TX         = 17;                // pin UART TX
     constexpr uint8_t PKT_HEADER       = 0xAA;              // protokol keamanan 
     constexpr uint32_t UART_TIMEOUT_MS = 500;               // watchdog: stop jika tak ada paket
@@ -78,7 +79,6 @@ static void applyMovement(float forward, float strafe, float omega) {
         fabsf(omega)   < Config::DEADZONE_RPM) {
         headingCorr = 0.0f;
         mpu.setheading(mpu.outputYaw());
-        resetAllPID();
         stopAll();
         return;
     }
@@ -269,7 +269,7 @@ static void taskControl(void*) {
 
 // core 0
 static void taskComms(void*) {
-    TickType_t xLastWake = xTaskGetTickCount(); // 
+    TickType_t xLastWake = xTaskGetTickCount(); 
 
     for (;;) {
         handlePIDSerial();
@@ -317,11 +317,11 @@ static void taskComms(void*) {
                 float str = (float)PS4.LStickX();
                 float omg = (float)PS4.RStickX();
 
-                if (PS4.Up())      { fwd =  100.0f; str =    0.0f; omg = 0.0f; }
-                if (PS4.Down())    { fwd = -100.0f; str =    0.0f; omg = 0.0f; }
-                if (PS4.Right())   { fwd =    0.0f; str =  100.0f; omg = 0.0f; }
-                if (PS4.Left())    { fwd =    0.0f; str = -100.0f; omg = 0.0f; }
-                if (PS4.UpRight()) { fwd =  100.0f; str =  100.0f; omg = 0.0f; }
+                if (PS4.Up())      { fwd =  25.0f; str =    0.0f; omg = 0.0f; }
+                if (PS4.Down())    { fwd = -25.0f; str =    0.0f; omg = 0.0f; }
+                if (PS4.Right())   { fwd =   0.0f; str =  25.0f; omg = 0.0f; }
+                if (PS4.Left())    { fwd =   0.0f; str = -25.0f; omg = 0.0f; }
+                //if (PS4.UpRight()) { fwd =  25.0f; str =  25.0f; omg = 0.0f; }
 
                 // Konversi stik → RPM
                 constexpr float SCALE = Config::MAX_RPM / 128.0f;
@@ -347,7 +347,7 @@ static void taskComms(void*) {
 
 
 void setup() {
-    Serial.begin(115200);
+    Serial.begin(921600);
     nvs_flash_erase();
     nvs_flash_init();
 
@@ -364,10 +364,10 @@ void setup() {
     if (mpu.isReady()) mpu.measureDrift(3000);
 
     // Motor                    name  Kp      Ki    Kd    chA  chB  ppr        rpwm  lpwm
-    motors[M_FR] = new Movement("Fr", 1.5f , 0.0f, 0.0f,  36,  39, Config::PPR,  27,  14);
-    motors[M_FL] = new Movement("Fl", 0.0f , 0.0f, 0.0f,  34,  35, Config::PPR,  13,  23);
-    motors[M_BR] = new Movement("Br", 0.0f , 0.0f, 0.0f,  25,  26, Config::PPR,  17,  16);
-    motors[M_BL] = new Movement("Bl", 0.0f , 0.0f, 0.0f,  32,  33, Config::PPR,  19,  18);
+    motors[M_FR] = new Movement("Fr", 3.8f , 0.01f, 0.0f,  36,  39, Config::PPR,  27,  14);
+    motors[M_FL] = new Movement("Fl", 5.0f , 0.01f, 0.0f,  34,  35, Config::PPR,  13,  23);
+    motors[M_BR] = new Movement("Br", 3.5f , 0.01f, 0.0f,  25,  26, Config::PPR,  17,  16);
+    motors[M_BL] = new Movement("Bl", 3.5f , 0.01f, 0.0f,  32,  33, Config::PPR,  19,  18);
     for (auto& m : motors) if (m) m->begin();
 
 

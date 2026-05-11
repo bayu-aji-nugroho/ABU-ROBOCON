@@ -16,7 +16,7 @@ static void ledc_timer_init(ledc_timer_t timer)
     ledc_timer_config_t cfg = {};
     cfg.speed_mode      = LEDC_LOW_SPEED_MODE;
     cfg.timer_num       = timer;
-    cfg.duty_resolution = LEDC_TIMER_12_BIT;   
+    cfg.duty_resolution = LEDC_TIMER_8_BIT;   
     cfg.freq_hz         = 18000;              
     cfg.clk_cfg         = LEDC_AUTO_CLK;
 
@@ -62,7 +62,7 @@ Movement::Movement(const char* name,
         esp_restart();
     }
 
-    _pid = new MyPID(Kp, Ki, Kd, -4095.0f, 4095.0f);
+    _pid = new MyPID(Kp, Ki, Kd, -255.0f, 255.0f);  // [FIX] limit 8-bit: -255 s/d 255, sebelumnya -4095 s/d 4095 (12-bit)
     if (!_pid) {
         ESP_LOGE(TAG, "[FATAL] PID '%s' alloc gagal!", name);
         esp_restart();
@@ -116,6 +116,7 @@ void Movement::update(float targetRPM)
     _actualRPM = _encoder->getRPM();
     _pwm       = _pid->calculate(_targetRPM, _actualRPM);
 
+    // duty sudah dalam range 0–255 karena PID output limit disesuaikan 8-bit
     const uint32_t duty = static_cast<uint32_t>(roundf(fabsf(_pwm)));
 
     if (_pwm > 0.0f) {

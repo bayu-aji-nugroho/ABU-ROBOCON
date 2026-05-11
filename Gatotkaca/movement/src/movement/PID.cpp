@@ -17,7 +17,7 @@ MyPID::MyPID(float kp, float ki, float kd, float outMin, float outMax)
     }
 
     pid->SetOutputLimits((double)outMin, (double)outMax);
-    pid->SetSampleTime(10); 
+    pid->SetSampleTime(1);  
     pid->SetMode(AUTOMATIC);
 
 }

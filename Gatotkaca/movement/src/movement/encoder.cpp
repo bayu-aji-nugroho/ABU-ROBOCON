@@ -1,4 +1,5 @@
-#include "../lib/movementLIB/encoder.h"
+//#include "../lib/movementLIB/encoder.h"
+#include "encoder.h"
 
 
 Encoder::Encoder(int a, int b, float pulses, String name)
