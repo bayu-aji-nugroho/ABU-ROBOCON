@@ -54,7 +54,7 @@ public:
 
     float getTilt()     const { return max(fabsf(pitch), fabsf(roll)); }
 
-    void  setheading(float h) { yawOffset = h; initMs    = millis();}
+    void  setheading(float h) { yawOffset = h; }
     float CorectionHeading();
     bool  isReady()     const { return dmpReady; }
     bool  isGyroReady() {return Gyro; }

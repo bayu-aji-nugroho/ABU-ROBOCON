@@ -12,7 +12,7 @@ MyPID::MyPID(float kp, float ki, float kd, float outMin, float outMax)
                   (double)kp, (double)ki, (double)kd, P_ON_E, DIRECT);
 
     if (!pid) {
-        Serial.printf("[FATAL] PID alloc gagal! Heap: %d\n", ESP.getFreeHeap());
+        Serial.printf("PID alloc gagal! Heap: %d\n", ESP.getFreeHeap());
         ESP.restart();
     }
 

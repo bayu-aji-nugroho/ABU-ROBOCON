@@ -7,7 +7,7 @@
 #include "../lib/movementLIB/gyroscope.h"
 #include "../lib/movementLIB/movement.h"
 namespace Config {
-    constexpr bool    UART_MODE        = false;             // false: gamepad -> esp32
+    constexpr bool    UART_MODE        = false;              // false: gamepad -> esp32
     constexpr bool    LOG              = true;              // print telemetri ke USB Serial
     constexpr bool    FIELD_ORIENTED   = false;             // field-oriented control
     constexpr float   PPR              = 134.4f * 7;        // total ppr
@@ -21,8 +21,8 @@ namespace Config {
     constexpr float   HEADING_KD       = 0.1f;              // Kd imu
     constexpr const char* PS4_MAC      = "40:1A:58:62:D6:A2"; // mac address gamepad
     constexpr int     UART2_BAUD       = 115200;            // Uart2 baud
-    constexpr int     UART2_RX         = 16;                //pin UART RX
-    constexpr int     UART2_TX         = 17;                // pin UART TX
+    constexpr int     UART2_RX         = 4;                 // Pindah ke 4 karena 16 dipakai motor
+    constexpr int     UART2_TX         = 5;                 // Pindah ke 5 karena 17 dipakai motor
     constexpr uint8_t PKT_HEADER       = 0xAA;              // protokol keamanan 
     constexpr uint32_t UART_TIMEOUT_MS = 500;               // watchdog: stop jika tak ada paket
     constexpr uint32_t CTRL_PERIOD_MS  = 10;                // 100 Hz control loop
@@ -129,8 +129,7 @@ static void pushTelemetry(bool connected) {
 
     char buf[256];
     const int n = snprintf(buf, sizeof(buf),
-        // FR: actual, target, error, pwm
-        "%.1f,%.1f,%.1f,%.0f,"
+        "%.1f,%.1f,%.1f,%.0f," // FR: actual, target, error, pwm
         // FL
         "%.1f,%.1f,%.1f,%.0f,"
         // BR
@@ -259,8 +258,12 @@ static void taskControl(void*) {
             stopAll();
         }
 
+        static uint32_t lastPushMs = 0;
         if constexpr (Config::LOG) {
-            pushTelemetry(conn);
+            if (millis() - lastPushMs >= 20) { // Kirim telemetri setiap 20ms (50Hz)
+                pushTelemetry(conn);
+                lastPushMs = millis();
+            }
         }
 
         vTaskDelayUntil(&xLastWake, pdMS_TO_TICKS(Config::CTRL_PERIOD_MS));
@@ -304,8 +307,8 @@ static void taskComms(void*) {
                     gConnected = false;
                     xSemaphoreGive(xMutex);
                 }
-                vTaskDelay(pdMS_TO_TICKS(200));
-                ESP.restart();
+                Serial.println(F("[PS4] Disconnected! Stopping robot..."));
+                vTaskDelay(pdMS_TO_TICKS(100));
             }
             wasConnected = isConn;
 
@@ -347,12 +350,12 @@ static void taskComms(void*) {
 
 
 void setup() {
-    Serial.begin(115200);
+    Serial.begin(921600);
     nvs_flash_erase();
     nvs_flash_init();
 
-    Serial2.begin(Config::UART2_BAUD, SERIAL_8N1,
-                  Config::UART2_RX, Config::UART2_TX);
+    // Serial2.begin(Config::UART2_BAUD, SERIAL_8N1,
+    //               Config::UART2_RX, Config::UART2_TX);
 
     if constexpr (!Config::UART_MODE) {
         delay(2000);

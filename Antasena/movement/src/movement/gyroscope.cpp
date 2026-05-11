@@ -28,7 +28,9 @@ void Mpu::init() {
         return;
     }
 
-    
+    mpu.CalibrateAccel(6);
+    mpu.CalibrateGyro(6);
+    mpu.PrintActiveOffsets();
 
     mpu.setDMPEnabled(true);
     dmpReady   = true;
@@ -42,7 +44,6 @@ void Mpu::init() {
 
     // Set referensi heading awal
     yawOffset = yaw;
-    initMs    = millis();
 }
 
 void Mpu::update() {
@@ -71,8 +72,7 @@ void Mpu::update() {
     roll               = ypr[2] * RAD_TO_DEG;
 
 
-    const float elapsed = (millis() - initMs) / 1000.0f;
-    yaw = rawYaw - (driftRate * elapsed);
+    yaw = rawYaw;
     
 }
 
@@ -90,33 +90,5 @@ float Mpu::CorectionHeading() {
 void Mpu::measureDrift(uint16_t durationMs) {
     if (!dmpReady) return;
 
-    // Baca yaw awal
-    update();
-    const float yawBefore = yaw;
-    const unsigned long t0 = millis();
-
-    // Tunggu sambil update
-    while (millis() - t0 < durationMs) {
-        update();
-        delay(10);
-    }
-
-    const float yawAfter  = yaw;
-    const float elapsed   = (millis() - t0) / 1000.0f;
-
-    
-    float drift = yawAfter - yawBefore;
-    while (drift >  180.0f) drift -= 360.0f;
-    while (drift < -180.0f) drift += 360.0f;
-
-    driftRate = drift / elapsed;
-    initMs    = millis(); // reset timer kompensasi
-    yaw       = yawBefore; // kembalikan yaw ke posisi sebelum pengukuran
-
-    Serial.printf("[IMU] Drift rate: %.4f °/detik (%.2f °/menit)\n",
-                  driftRate, driftRate * 60.0f);
-
-    if (fabsf(driftRate) > 1.0f) {
-        Serial.println("[IMU] WARNING: Drift terlalu tinggi (>1°/s). Coba kalibrasi offset gyro.");
-    }
+    Serial.println("[IMU] Auto-Calibration DMP sudah dijalankan. measureDrift manual dilewati.");
 }
