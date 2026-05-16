@@ -103,7 +103,7 @@ for (int i=0; i<4; i++) {
         gatot.putarbalik();
     }    
 }
-
+ 
 delay(5000);
 
 if (rakKiri) {
@@ -140,7 +140,8 @@ void naikKeForest() {
     //di isi sesuai gerak angkat robot 
 }
 
-void loop() {}
+void loop() {}  
+
 }
 
 

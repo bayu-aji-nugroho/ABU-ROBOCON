@@ -171,7 +171,7 @@ float readCurrent() {
 void readAllSensors() {
   // Baca MPU6050 - IMU
   mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
-  
+   
   // Baca APDS9960 - Proximity
   proximity = apds.readProximity();
   
